@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import statistics as stats
 import time
 from collections import defaultdict
@@ -63,14 +64,29 @@ def _iter_corpus(root: Path):
         yield {"file": p.name}, labels.get(p.name), img
 
 
-def run(items, budget_ms: float):
+def _failure_slug(stratum: dict, idx: int, outcome: str) -> str:
+    """Filename encoding the failed cell's parameters, sanitised for the FS."""
+    body = "_".join(f"{k}={v}" for k, v in stratum.items())
+    body = re.sub(r"[^A-Za-z0-9.=_-]+", "", body)
+    return f"{idx:04d}_{outcome}_{body}"[:180] + ".png"
+
+
+def run(items, budget_ms: float, dump_failures: str | None = None):
+    """Run the reader over items. If dump_failures is a directory, every cell
+    that is not a correct decode is saved there — so a failure can be inspected
+    and a reader miss told apart from an impossible/buggy synthetic sample."""
     reader = Reader(validator=AcceptAny())
+    if dump_failures:
+        Path(dump_failures).mkdir(parents=True, exist_ok=True)
     rows = []
-    for stratum, truth, img in items:
+    for idx, (stratum, truth, img) in enumerate(items):
         r = reader.read(img, budget_ms=budget_ms)
         correct = bool(r.ok and (truth is None or r.payload == truth))
         # best stage reached across candidates (for the found-vs-decoded split)
         found = any(t.found for _, res in r.candidate_traces for t in res.trace)
+        if dump_failures and not correct:
+            outcome = "wrong" if r.ok else "miss"
+            cv2.imwrite(str(Path(dump_failures) / _failure_slug(stratum, idx, outcome)), img)
         rows.append({
             "stratum": stratum, "correct": correct, "decoded": r.ok,
             "found": found, "rung": r.rung, "ms": r.elapsed_ms,
@@ -131,6 +147,8 @@ def main():
     ap.add_argument("--corpus", type=str, default=None)
     ap.add_argument("--budget", type=float, default=250.0)
     ap.add_argument("--out", type=str, default=None)
+    ap.add_argument("--dump-failures", type=str, default=None,
+                    help="directory to save every failed (miss/wrong) image for inspection")
     args = ap.parse_args()
 
     if args.corpus:
@@ -139,7 +157,7 @@ def main():
         items = list(_iter_synth(args.per_cell))
 
     t0 = time.perf_counter()
-    rows = run(items, args.budget)
+    rows = run(items, args.budget, dump_failures=args.dump_failures)
     summary = summarize(rows)
     summary["wall_s"] = time.perf_counter() - t0
 

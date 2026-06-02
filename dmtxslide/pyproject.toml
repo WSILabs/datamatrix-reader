@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "cffi>=1.16"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dmtxslide"
+version = "0.0.1"
+description = "Adaptive, source-agnostic DataMatrix reader built on libdmtx (slide-label domain)"
+requires-python = ">=3.10"
+dependencies = ["cffi>=1.16", "numpy>=1.24", "opencv-python-headless>=4.8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+dmtxslide = ["*.so"]
+
+# Build the native shim once after install:
+#   python -m dmtxslide._build_dmtx
+# Requires libdmtx headers (apt: libdmtx-dev; brew: libdmtx).

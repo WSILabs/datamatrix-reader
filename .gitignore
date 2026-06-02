@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Compiled cffi shim (built per-platform via `python -m dmtxslide._build_dmtx`)
+*.so
+*.o
+*.dylib
+# generated cffi C source
+**/_dmtx.c
+
+# Benchmark run outputs (regenerated; baselines diffed via bench.report)
+runs/
+
+# Archives / scratch
+*.tar.gz
+
+# macOS
+.DS_Store

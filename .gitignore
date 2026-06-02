@@ -33,5 +33,9 @@ corpus/public/
 dmtxslide/corpus/barber/images/
 corpus/barber/images/
 
+# Domain reference images (web/marketing; used to calibrate synth, not tracked)
+dmtxslide/corpus/pathology_samples/
+corpus/pathology_samples/
+
 # macOS
 .DS_Store

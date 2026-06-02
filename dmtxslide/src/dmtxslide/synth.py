@@ -39,15 +39,58 @@ def render(payload: bytes) -> np.ndarray:
     return binding.encode(payload, module_size=1, margin=2)
 
 
+# Accession-style strings used to crowd the quiet zone, modelled on real
+# pathology labels (see decoded BarBeR/pathology samples).
+ACCESSION_SAMPLES = [
+    "S25-04821 A3", "PCAA00028208", "B1-2  H&E", "GDC-04-123456",
+    "370956.1/10 PAS", "Smith, W", "2025-06-02", "BLOCK 2  L3",
+]
+
+
+def crowd_quiet_zone(code: np.ndarray, substrate_bgr, ink_bgr,
+                     rng, margin_frac: float = 0.6) -> np.ndarray:
+    """Place the code on a substrate canvas with accession text crowding the
+    quiet-zone margin on two sides.
+
+    Models the real pathology failure: text encroaches on the code's quiet zone
+    (stressing *localization*), while the code's own modules stay pristine — so
+    the code is re-stamped after the text is drawn, guaranteeing no module is
+    overwritten regardless of how far the text overshoots.
+    """
+    h, w = code.shape[:2]
+    m = max(12, int(margin_frac * max(h, w)))
+    canvas = np.full((h + 2 * m, w + 2 * m, 3), substrate_bgr, np.uint8)
+    y0, x0 = m, m  # centred -> equal margins on every side
+    ink = tuple(int(c) for c in ink_bgr)
+    fs = max(0.3, m / 40.0)
+    th = max(1, int(round(fs * 1.6)))
+    # bottom margin: a line encroaching up toward the code
+    cv2.putText(canvas, rng.choice(ACCESSION_SAMPLES),
+                (x0, y0 + h + int(m * 0.65)),
+                cv2.FONT_HERSHEY_SIMPLEX, fs, ink, th, cv2.LINE_AA)
+    # right margin: a short second-side label
+    cv2.putText(canvas, rng.choice(ACCESSION_SAMPLES)[:6],
+                (x0 + w + int(m * 0.1), y0 + h // 2),
+                cv2.FONT_HERSHEY_SIMPLEX, fs * 0.8, ink, th, cv2.LINE_AA)
+    # re-stamp the code so its modules are pristine even if text overshot
+    canvas[y0:y0 + h, x0:x0 + w] = code
+    return canvas
+
+
 def degrade(grid: np.ndarray, p: DegradeParams, rng: random.Random) -> np.ndarray:
     """Clean grid -> a realistic BGR capture, exercising the colour path."""
     img = cv2.resize(grid, None, fx=p.module_px, fy=p.module_px,
                      interpolation=cv2.INTER_NEAREST).astype(np.float32) / 255.0
 
     if p.ink_gain:
-        k = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        dark = cv2.erode(img, k, iterations=p.ink_gain)  # grow dark modules
-        img = dark
+        # Dot gain keyed to module pitch: thicken dark modules by a fraction of
+        # a module, so it models the same physical print artifact at any
+        # resolution. A fixed-pixel kernel annihilates low-px codes (a solid
+        # blob no reader can read) — unrealistic and an unfair benchmark sample.
+        rad = int(round(p.ink_gain * 0.12 * p.module_px))
+        if rad >= 1:
+            k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * rad + 1, 2 * rad + 1))
+            img = cv2.erode(img, k, iterations=1)  # grow dark (ink) regions
     if p.dropout > 0:
         mask = (np.random.default_rng(rng.randint(0, 1 << 30))
                 .random(img.shape) < p.dropout)
@@ -59,9 +102,9 @@ def degrade(grid: np.ndarray, p: DegradeParams, rng: random.Random) -> np.ndarra
     color = img[..., None] * sub + (1 - img[..., None]) * ink
 
     if p.quiet_crowd:
-        h, w, _ = color.shape
-        cv2.putText(color, "S25-0001", (2, h - 2), cv2.FONT_HERSHEY_SIMPLEX,
-                    h / 90.0, tuple(map(float, ink)), 1, cv2.LINE_AA)
+        cu = (color * 255).clip(0, 255).astype(np.uint8)
+        cu = crowd_quiet_zone(cu, p.substrate_bgr, p.print_bgr, rng)
+        color = cu.astype(np.float32) / 255.0
 
     if p.rotation_deg:
         h, w = color.shape[:2]
@@ -85,14 +128,20 @@ def degrade(grid: np.ndarray, p: DegradeParams, rng: random.Random) -> np.ndarra
                               value=tuple(map(int, np.array(p.substrate_bgr))))
 
 
-# axis grids — each value becomes a reporting stratum
+# axis grids — each value becomes a reporting stratum. Calibrated to the
+# pathology slide/cassette domain from decoded real samples: low pixels/module,
+# saturated colour stock plus low-contrast laser etch, modest rotation (flat
+# capture). Every value is kept non-degenerate by tests/test_synth.py.
 AXES = {
-    "module_px": [3.0, 4.0, 6.0, 10.0],
+    "module_px": [2.0, 3.0, 4.5, 8.0],
     "blur_sigma": [0.0, 0.8, 1.6],
     "ink_gain": [0, 1, 2],
-    "substrate": [((255, 255, 255), (0, 0, 0)),       # white / black
-                  ((180, 230, 255), (20, 20, 20)),     # yellow stock
-                  ((230, 200, 255), (40, 20, 40))],    # pink stock
+    "substrate": [((255, 255, 255), (10, 10, 10)),     # white
+                  ((60, 230, 255), (10, 10, 10)),      # saturated yellow stock
+                  ((200, 150, 255), (10, 10, 10)),     # pink stock
+                  ((130, 230, 150), (10, 10, 10)),     # green stock
+                  ((255, 200, 130), (10, 10, 10)),     # blue stock
+                  ((200, 200, 200), (120, 120, 120))], # low-contrast laser etch
     "rotation_deg": [0.0, 7.0],
 }
 

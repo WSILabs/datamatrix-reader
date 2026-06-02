@@ -31,7 +31,15 @@ from dmtxslide.validate import AcceptAny
 
 
 def _payload_pool() -> list[bytes]:
-    return [f"S25-{n:05d}-A{n % 9}".encode() for n in range(1, 40)]
+    # Mixed-length accession formats so the benchmark spans real symbol sizes
+    # (~12x12 .. 24x24 modules); payload length drives the symbol dimension.
+    fmts = [
+        lambda n: f"S{n % 25:02d}-{n:04d}-B",            # short
+        lambda n: f"S25-{n:05d}-A{n % 9}",               # medium
+        lambda n: f"PCAA{n:08d} B{n % 4}-{n % 9}",       # long
+        lambda n: f"GDC-{n % 9:02d}-{n:06d}, CASE",      # longer
+    ]
+    return [fmts[n % len(fmts)](n).encode() for n in range(1, 40)]
 
 
 def _iter_synth(per_cell: int):

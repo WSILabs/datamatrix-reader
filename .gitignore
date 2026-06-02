@@ -25,5 +25,13 @@ runs/
 # Archives / scratch
 *.tar.gz
 
+# Large public datasets (multi-GB; not for version control)
+dmtxslide/corpus/public/
+corpus/public/
+
+# BarBeR-derived images (regenerable via tools/import_barber.py); keep labels.csv
+dmtxslide/corpus/barber/images/
+corpus/barber/images/
+
 # macOS
 .DS_Store

@@ -65,16 +65,20 @@ def delete_image(path: Path, removed_dir: Path,
 
 
 def autofill(image_dir: Path, labels: dict[str, str], budget: int,
-             folds=None) -> dict:
+             folds=None, progress: bool = False) -> dict:
     """Run decoders over every still-pending image; auto-fill consensus reads
     into labels (+ labels.csv), return {'added': int, 'queue': [(Path, [str])]}
-    for the no-read/disagreement images."""
+    for the no-read/disagreement images. The decode pass is the slow part
+    (~hundreds of ms/image); pass progress=True to print a live counter
+    (counts only, no payloads/filenames -> PHI-safe)."""
     if folds is None:
         from tools.compare_backends import FOLDS as folds
     csv_path = image_dir / "labels.csv"
+    pending = pending_images(image_dir, labels)
+    total = len(pending)
     queue: list[tuple[Path, list[str]]] = []
     added = 0
-    for p in pending_images(image_dir, labels):
+    for n, p in enumerate(pending, 1):
         img = cv2.imread(str(p), cv2.IMREAD_COLOR)
         if img is None:
             continue
@@ -85,6 +89,11 @@ def autofill(image_dir: Path, labels: dict[str, str], budget: int,
             added += 1
         else:
             queue.append((p, [payload_to_text(v) for v in vals]))
+        if progress:
+            print(f"\rPhase A: decoded {n}/{total}  "
+                  f"(auto {added}, queue {len(queue)})", end="", flush=True)
+    if progress and total:
+        print()  # terminate the \r line
     save_labels(csv_path, labels)
     return {"added": added, "queue": queue}
 
@@ -160,7 +169,7 @@ def main():
     csv_path = image_dir / "labels.csv"
     labels = load_labels(csv_path)
     before = len(labels)
-    res = autofill(image_dir, labels, args.budget)
+    res = autofill(image_dir, labels, args.budget, progress=True)
     print(f"auto-filled {res['added']}  (already had {before})  "
           f"queue {len(res['queue'])}")
     if res["queue"]:

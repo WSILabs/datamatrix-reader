@@ -80,3 +80,13 @@ def test_autofill_queues_disagreement(tmp_path):
     res = autofill(tmp_path, labels, budget=50, folds=folds)
     assert labels == {}                       # not auto-filled
     assert [(p.name, c) for p, c in res["queue"]] == [("x.png", ["A", "B"])]
+
+def test_autofill_silent_by_default_progress_prints_counts(tmp_path, capsys):
+    _png(tmp_path, "one.png"); _png(tmp_path, "two.png")
+    folds = [("f1", lambda i, b: b"P")]
+    autofill(tmp_path, {}, budget=50, folds=folds)            # default: silent
+    assert capsys.readouterr().out == ""
+    autofill(tmp_path, {}, budget=50, folds=folds, progress=True)
+    out = capsys.readouterr().out
+    assert "2/2" in out and "auto 2" in out                  # counter shown
+    assert "one.png" not in out and "two.png" not in out     # no filenames (PHI)

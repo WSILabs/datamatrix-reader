@@ -6,17 +6,29 @@ from pathlib import Path
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 
-# Grundium WSI filenames embed the accession: "<grp>__scan_<n>_<ACCESSION>_label<n>.png".
-# We use it only as a pre-fill headstart for manual entry (verify against the image).
-_ACCESSION_RE = re.compile(r"scan_\d+_(.*?)_label\d*", re.IGNORECASE)
+# The DataMatrix payload is an accession + block: e.g. "1-S-25-00828 A8-1"
+#   accession = <site>-<S|SH...>-<yy>-<serial5>   block = <part><-level>
+# Grundium filenames embed the same string plus a trailing stain ("... A8-1 HE")
+# that the barcode omits; matching this pattern extracts accession+block and
+# drops the stain. Empirically: 366/368 real decodes fullmatch it (the 2 that
+# don't are erroneous accession-only reads), 399/405 filenames contain it.
+_PAYLOAD_RE = re.compile(r"\d-[A-Za-z]{1,2}-\d{2}-\d{5} [A-Za-z0-9]+(?:-[A-Za-z0-9]+)*")
 
 
 def parse_accession(filename: str) -> str:
-    """Best-effort accession string parsed from a wsi_labels filename, as a
-    pre-fill hint for manual entry. Returns '' when the pattern doesn't match
-    (e.g. no-code calibration labels). This is a hint to verify, not truth."""
-    m = _ACCESSION_RE.search(filename)
-    return m.group(1).strip() if m else ""
+    """Pre-fill headstart for manual entry: the accession+block the barcode
+    encodes (e.g. '1-S-25-00828 A8-1'), extracted from the filename with the
+    trailing stain dropped. '' when the filename has no such pattern (e.g. a
+    codeless calibration label). A hint to verify against the image, not truth."""
+    m = _PAYLOAD_RE.search(filename)
+    return m.group(0) if m else ""
+
+
+def is_valid_payload(payload: str) -> bool:
+    """True iff payload is a well-formed accession+block. Used to reject
+    format-invalid decoder reads (e.g. accession-only) from being trusted as
+    ground truth."""
+    return bool(_PAYLOAD_RE.fullmatch(payload))
 
 
 def decide(reads: dict[str, bytes | None]) -> tuple[str, list[bytes]]:

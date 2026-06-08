@@ -22,6 +22,11 @@ def decide(reads: dict[str, bytes | None]) -> tuple[str, list[bytes]]:
 
 
 def payload_to_text(b: bytes) -> str:
+    # Accession payloads are ASCII, so this round-trips losslessly through
+    # labels.csv and compare_backends.load_corpus's utf-8 .encode(). The latin-1
+    # branch is only a crash-guard for an unexpected non-ASCII read; such a value
+    # would NOT round-trip back to the same bytes (utf-8 re-encode differs), so a
+    # non-ASCII row should be treated as suspect rather than trusted ground truth.
     try:
         return b.decode("ascii")
     except UnicodeDecodeError:

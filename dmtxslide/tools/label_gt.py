@@ -16,3 +16,27 @@ def decide(reads: dict[str, bytes | None]) -> tuple[str, list[bytes]]:
     if len(vals) == 1:
         return ("auto", vals)
     return ("queue", vals)
+
+
+def payload_to_text(b: bytes) -> str:
+    try:
+        return b.decode("ascii")
+    except UnicodeDecodeError:
+        return b.decode("latin-1")
+
+
+def load_labels(path: Path) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    if path.exists():
+        with path.open(newline="") as f:
+            for row in csv.DictReader(f):
+                labels[row["file"]] = row["payload"]
+    return labels
+
+
+def save_labels(path: Path, labels: dict[str, str]) -> None:
+    with path.open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["file", "payload"])
+        for name in sorted(labels):
+            w.writerow([name, labels[name]])

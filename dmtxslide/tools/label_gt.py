@@ -1,11 +1,23 @@
 from __future__ import annotations
 import argparse
-import csv, cv2, shutil
+import csv, cv2, re, shutil
 import tkinter as tk
 from tkinter import messagebox
 from pathlib import Path
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
+
+# Grundium WSI filenames embed the accession: "<grp>__scan_<n>_<ACCESSION>_label<n>.png".
+# We use it only as a pre-fill headstart for manual entry (verify against the image).
+_ACCESSION_RE = re.compile(r"scan_\d+_(.*?)_label\d*", re.IGNORECASE)
+
+
+def parse_accession(filename: str) -> str:
+    """Best-effort accession string parsed from a wsi_labels filename, as a
+    pre-fill hint for manual entry. Returns '' when the pattern doesn't match
+    (e.g. no-code calibration labels). This is a hint to verify, not truth."""
+    m = _ACCESSION_RE.search(filename)
+    return m.group(1).strip() if m else ""
 
 
 def decide(reads: dict[str, bytes | None]) -> tuple[str, list[bytes]]:
@@ -105,6 +117,8 @@ def run_gui(queue, image_dir: Path, removed_dir: Path,
     root = tk.Tk()
     root.title("wsi_labels GT")
     state = {"i": 0}
+    drafts: dict[int, str] = {}            # unsaved text per index, kept across nav
+    last = {"payload": ""}                 # most recent saved payload, for "same as last"
     img_label = tk.Label(root)
     img_label.pack()
     hint = tk.Label(root, fg="#666"); hint.pack()
@@ -121,7 +135,13 @@ def run_gui(queue, image_dir: Path, removed_dir: Path,
         img_label.config(image=photo["ref"])
         hint.config(text=("candidates: " + "   ".join(candidates)) if candidates else "")
         counter.config(text=f"{i + 1} / {len(queue)}   ({path.name})")
+        # pre-fill: a value already saved wins, else the unsaved draft, else the
+        # accession parsed from the filename as a headstart. select-all so Enter
+        # accepts it and typing replaces it.
+        prefill = labels.get(path.name) or drafts.get(i) or parse_accession(path.name)
         entry.delete(0, tk.END)
+        entry.insert(0, prefill)
+        entry.select_range(0, tk.END)
         entry.focus_set()
 
     def advance(d):
@@ -133,6 +153,10 @@ def run_gui(queue, image_dir: Path, removed_dir: Path,
         state["i"] = i if i >= 0 else state["i"]
         show()
 
+    def nav(d):
+        drafts[state["i"]] = entry.get()   # don't lose typed-but-unsaved text
+        advance(d)
+
     def save(_=None):
         val = entry.get().strip()
         if not val:
@@ -141,18 +165,29 @@ def run_gui(queue, image_dir: Path, removed_dir: Path,
         path, _c = queue[state["i"]]
         labels[path.name] = val
         save_labels(csv_path, labels)
+        last["payload"] = val
+        drafts.pop(state["i"], None)        # committed; drop any stale draft
         advance(1)
+
+    def same_as_last(_=None):
+        entry.delete(0, tk.END)
+        entry.insert(0, last["payload"])
+        entry.select_range(0, tk.END)
+        entry.focus_set()
 
     def delete():
         path, _c = queue[state["i"]]
         delete_image(path, removed_dir, labels, csv_path)
+        drafts.pop(state["i"], None)
         advance(1)
 
     tk.Button(root, text="Save ⏎", command=save).pack(side="left")
+    tk.Button(root, text="Same as last", command=same_as_last).pack(side="left")
     tk.Button(root, text="Delete - no barcode", command=delete).pack(side="left")
-    tk.Button(root, text="Prev", command=lambda: advance(-1)).pack(side="left")
-    tk.Button(root, text="Next", command=lambda: advance(1)).pack(side="left")
+    tk.Button(root, text="Prev", command=lambda: nav(-1)).pack(side="left")
+    tk.Button(root, text="Next", command=lambda: nav(1)).pack(side="left")
     root.bind("<Return>", save)
+    root.bind("<Control-l>", same_as_last)  # keyboard shortcut for "same as last"
     show()
     root.mainloop()
 

@@ -56,7 +56,15 @@ def test_delete_moves_file_and_drops_label(tmp_path):
     assert pending_images(tmp_path, labels) == []
 
 
-from tools.label_gt import autofill
+from tools.label_gt import autofill, parse_accession
+
+def test_parse_accession_from_filename():
+    # fake accession strings (no real PHI in the repo); matches the Grundium
+    # "<grp>__scan_<n>_<ACCESSION>_label<n>.png" pattern, accession may contain spaces
+    assert parse_accession("wsi_incoming__scan_42_AB-12-345 X1-1_label01.png") == "AB-12-345 X1-1"
+    assert parse_accession("wsi_logged__scan_7_FOO BAR_label02.png") == "FOO BAR"
+    assert parse_accession("wsi_incoming__scan_9__label01.png") == ""   # double __ = no accession
+    assert parse_accession("flat_field.png") == ""                       # no match at all
 
 def _png(d, name):
     cv2.imwrite(str(d / name), np.zeros((8, 8, 3), np.uint8)); return d / name

@@ -1,14 +1,13 @@
-"""3-fold decode comparison on the same images:
-  1. preprocess+libdmtx  -> full Reader (channel-select, localize, cascade)
-  2. libdmtx raw         -> plain gray -> decode_staged (no preprocessing)
-  3. zxing               -> plain gray -> zxing-cpp (same input as #2)
+"""2-fold decode comparison on the same images:
+  1. zxing raw      -> plain gray -> zxing-cpp (single pass)
+  2. zxing cascade  -> Reader: raw zxing, then upscale2x+CLAHE on a miss
 
-Folds 2 and 3 share input, so their gap is purely the decoder; fold 1 vs 2 is
-the value of our preprocessing. Run on labelled sets (synth/corpus) for correct
-rate; pathology has no truth, so report decode-hits + cross-decoder agreement.
+Fold 2 minus fold 1 is the value of the poor-print fallback. Run on labelled
+sets (synth/corpus) for correct rate; pathology has no truth, so report
+decode-hits + cross-decoder agreement.
 
     python -m tools.compare_backends --synth --per-cell 1 --budget 250
-    python -m tools.compare_backends --corpus corpus/barber --budget 250
+    python -m tools.compare_backends --corpus corpus/wsi_labels --budget 250
     python -m tools.compare_backends --pathology corpus/pathology_samples
 """
 from __future__ import annotations
@@ -22,7 +21,6 @@ from pathlib import Path
 import cv2
 import zxingcpp
 
-from dmtxslide import binding
 from dmtxslide.reader import Reader
 from bench.harness import _iter_synth, _payload_pool
 from dmtxslide.synth import strata
@@ -63,24 +61,17 @@ def _gray(img):
     return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
 
 
-def fold_preprocess_libdmtx(img, budget):
-    r = _reader.read(img, budget_ms=budget)
-    return r.payload
-
-
-def fold_libdmtx_raw(img, budget):
-    r = binding.decode_staged(_gray(img), timeout_ms=int(budget))
-    return r.payload if r.decoded else None
-
-
-def fold_zxing(img, budget):
+def fold_zxing_raw(img, budget):
     res = zxingcpp.read_barcodes(_gray(img), formats=_DM)
     return res[0].bytes if res else None
 
 
-FOLDS = [("preprocess+libdmtx", fold_preprocess_libdmtx),
-         ("libdmtx raw", fold_libdmtx_raw),
-         ("zxing", fold_zxing)]
+def fold_zxing_cascade(img, budget):
+    return _reader.read(img, budget_ms=budget).payload
+
+
+FOLDS = [("zxing raw", fold_zxing_raw),
+         ("zxing cascade", fold_zxing_cascade)]
 
 
 def _pct(xs, p):

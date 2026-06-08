@@ -2,7 +2,6 @@ from __future__ import annotations
 import argparse
 import csv, cv2, re, shutil
 import tkinter as tk
-from tkinter import messagebox
 from pathlib import Path
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
@@ -153,21 +152,23 @@ def run_gui(queue, image_dir: Path, removed_dir: Path,
         state["i"] = i if i >= 0 else state["i"]
         show()
 
-    def nav(d):
-        drafts[state["i"]] = entry.get()   # don't lose typed-but-unsaved text
-        advance(d)
-
-    def save(_=None):
+    def commit_current():
+        # persist the current entry if it has content; a blank box means
+        # "skip for now" (the image stays in the queue next run). Never loses
+        # typed text: non-blank -> labels.csv, blank-but-typed -> in-memory draft.
         val = entry.get().strip()
-        if not val:
-            messagebox.showwarning("Empty", "Enter a payload, or use Delete.")
-            return
-        path, _c = queue[state["i"]]
-        labels[path.name] = val
-        save_labels(csv_path, labels)
-        last["payload"] = val
-        drafts.pop(state["i"], None)        # committed; drop any stale draft
-        advance(1)
+        if val:
+            path, _c = queue[state["i"]]
+            labels[path.name] = val
+            save_labels(csv_path, labels)
+            last["payload"] = val
+            drafts.pop(state["i"], None)
+        else:
+            drafts[state["i"]] = entry.get()
+
+    def nav(d):
+        commit_current()                   # Prev/Next/Enter all save first
+        advance(d)
 
     def same_as_last(_=None):
         entry.delete(0, tk.END)
@@ -181,12 +182,11 @@ def run_gui(queue, image_dir: Path, removed_dir: Path,
         drafts.pop(state["i"], None)
         advance(1)
 
-    tk.Button(root, text="Save ⏎", command=save).pack(side="left")
+    tk.Button(root, text="◀ Prev (saves)", command=lambda: nav(-1)).pack(side="left")
+    tk.Button(root, text="Next ⏎ (saves)", command=lambda: nav(1)).pack(side="left")
     tk.Button(root, text="Same as last", command=same_as_last).pack(side="left")
     tk.Button(root, text="Delete - no barcode", command=delete).pack(side="left")
-    tk.Button(root, text="Prev", command=lambda: nav(-1)).pack(side="left")
-    tk.Button(root, text="Next", command=lambda: nav(1)).pack(side="left")
-    root.bind("<Return>", save)
+    root.bind("<Return>", lambda e: nav(1))
     root.bind("<Control-l>", same_as_last)  # keyboard shortcut for "same as last"
     show()
     root.mainloop()

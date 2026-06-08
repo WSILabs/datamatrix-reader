@@ -41,5 +41,9 @@ corpus/pathology_samples/
 dmtxslide/corpus/wsi_labels/
 corpus/wsi_labels/
 
+# No-barcode labels moved aside by tools/label_gt.py (PHI). NEVER commit.
+dmtxslide/corpus/wsi_labels_removed/
+corpus/wsi_labels_removed/
+
 # macOS
 .DS_Store

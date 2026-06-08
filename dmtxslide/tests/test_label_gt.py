@@ -27,3 +27,27 @@ def test_labels_roundtrip_and_sorted(tmp_path):
 
 def test_load_missing_file_is_empty(tmp_path):
     assert load_labels(tmp_path / "nope.csv") == {}
+
+
+from tools.label_gt import pending_images, delete_image
+
+def _touch(d, name):
+    p = d / name; p.write_bytes(b"x"); return p
+
+def test_pending_excludes_labeled_and_nonimages(tmp_path):
+    _touch(tmp_path, "a.png"); _touch(tmp_path, "b.png")
+    _touch(tmp_path, "labels.csv")  # non-image, must be ignored
+    pend = pending_images(tmp_path, {"a.png": "1"})
+    assert [p.name for p in pend] == ["b.png"]
+
+def test_delete_moves_file_and_drops_label(tmp_path):
+    img = _touch(tmp_path, "junk.png")
+    removed = tmp_path / "removed"
+    labels = {"junk.png": "stale"}
+    csv_path = tmp_path / "labels.csv"
+    delete_image(img, removed, labels, csv_path)
+    assert not img.exists()
+    assert (removed / "junk.png").exists()
+    assert "junk.png" not in labels
+    assert load_labels(csv_path) == {}
+    assert pending_images(tmp_path, labels) == []

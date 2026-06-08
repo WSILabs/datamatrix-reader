@@ -40,3 +40,17 @@ def save_labels(path: Path, labels: dict[str, str]) -> None:
         w.writerow(["file", "payload"])
         for name in sorted(labels):
             w.writerow([name, labels[name]])
+
+
+def pending_images(image_dir: Path, labels: dict[str, str]) -> list[Path]:
+    return [p for p in sorted(image_dir.iterdir())
+            if p.suffix.lower() in IMG_EXTS and p.name not in labels]
+
+
+def delete_image(path: Path, removed_dir: Path,
+                 labels: dict[str, str], labels_csv: Path) -> None:
+    removed_dir.mkdir(exist_ok=True)
+    shutil.move(str(path), str(removed_dir / path.name))
+    if path.name in labels:
+        del labels[path.name]
+        save_labels(labels_csv, labels)

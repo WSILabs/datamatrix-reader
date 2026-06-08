@@ -52,3 +52,31 @@ def test_delete_moves_file_and_drops_label(tmp_path):
     assert "junk.png" not in labels
     assert load_labels(csv_path) == {}
     assert pending_images(tmp_path, labels) == []
+
+
+import cv2, numpy as np
+from tools.label_gt import autofill
+
+def _png(d, name):
+    cv2.imwrite(str(d / name), np.zeros((8, 8, 3), np.uint8)); return d / name
+
+def test_autofill_writes_consensus_and_queues_rest(tmp_path):
+    for n in ("agree.png", "disagree.png", "noread.png"):
+        _png(tmp_path, n)
+    def f1(img, b): return b"P"      # fires on all
+    def f2(img, b): return None
+    folds = [("f1", f1), ("f2", f2)]
+    labels = {}
+    res = autofill(tmp_path, labels, budget=50, folds=folds)
+    # f1 is a sole reader on every image -> all become consensus auto-fills
+    assert labels == {"agree.png": "P", "disagree.png": "P", "noread.png": "P"}
+    assert res["added"] == 3 and res["queue"] == []
+    assert load_labels(tmp_path / "labels.csv")["agree.png"] == "P"
+
+def test_autofill_queues_disagreement(tmp_path):
+    _png(tmp_path, "x.png")
+    folds = [("f1", lambda i, b: b"A"), ("f2", lambda i, b: b"B")]
+    labels = {}
+    res = autofill(tmp_path, labels, budget=50, folds=folds)
+    assert labels == {}                       # not auto-filled
+    assert [(p.name, c) for p, c in res["queue"]] == [("x.png", ["A", "B"])]

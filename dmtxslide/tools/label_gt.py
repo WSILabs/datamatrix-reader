@@ -1,5 +1,5 @@
 from __future__ import annotations
-import csv, shutil
+import csv, cv2, shutil
 from pathlib import Path
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
@@ -54,3 +54,28 @@ def delete_image(path: Path, removed_dir: Path,
     if path.name in labels:
         del labels[path.name]
         save_labels(labels_csv, labels)
+
+
+def autofill(image_dir: Path, labels: dict[str, str], budget: int,
+             folds=None) -> dict:
+    """Run decoders over every still-pending image; auto-fill consensus reads
+    into labels (+ labels.csv), return {'added': int, 'queue': [(Path, [str])]}
+    for the no-read/disagreement images."""
+    if folds is None:
+        from tools.compare_backends import FOLDS as folds
+    csv_path = image_dir / "labels.csv"
+    queue: list[tuple[Path, list[str]]] = []
+    added = 0
+    for p in pending_images(image_dir, labels):
+        img = cv2.imread(str(p), cv2.IMREAD_COLOR)
+        if img is None:
+            continue
+        reads = {name: fn(img, budget) for name, fn in folds}
+        status, vals = decide(reads)
+        if status == "auto":
+            labels[p.name] = payload_to_text(vals[0])
+            added += 1
+        else:
+            queue.append((p, [payload_to_text(v) for v in vals]))
+    save_labels(csv_path, labels)
+    return {"added": added, "queue": queue}

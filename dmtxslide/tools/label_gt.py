@@ -110,6 +110,15 @@ def run_gui(queue, image_dir: Path, removed_dir: Path,
         entry.delete(0, tk.END)
         entry.focus_set()
 
+    def advance(d):
+        # step in direction d, skipping queue entries whose file was deleted.
+        # forward past the end closes the window; backward past the front stays put.
+        i = state["i"] + d
+        while 0 <= i < len(queue) and not queue[i][0].exists():
+            i += d
+        state["i"] = i if i >= 0 else state["i"]
+        show()
+
     def save(_=None):
         val = entry.get().strip()
         if not val:
@@ -118,20 +127,17 @@ def run_gui(queue, image_dir: Path, removed_dir: Path,
         path, _c = queue[state["i"]]
         labels[path.name] = val
         save_labels(csv_path, labels)
-        state["i"] += 1; show()
+        advance(1)
 
     def delete():
         path, _c = queue[state["i"]]
         delete_image(path, removed_dir, labels, csv_path)
-        state["i"] += 1; show()
-
-    def nav(d):
-        state["i"] = max(0, min(len(queue) - 1, state["i"] + d)); show()
+        advance(1)
 
     tk.Button(root, text="Save ⏎", command=save).pack(side="left")
     tk.Button(root, text="Delete - no barcode", command=delete).pack(side="left")
-    tk.Button(root, text="Prev", command=lambda: nav(-1)).pack(side="left")
-    tk.Button(root, text="Next", command=lambda: nav(1)).pack(side="left")
+    tk.Button(root, text="Prev", command=lambda: advance(-1)).pack(side="left")
+    tk.Button(root, text="Next", command=lambda: advance(1)).pack(side="left")
     root.bind("<Return>", save)
     show()
     root.mainloop()

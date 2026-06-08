@@ -50,7 +50,7 @@ def pending_images(image_dir: Path, labels: dict[str, str]) -> list[Path]:
 def delete_image(path: Path, removed_dir: Path,
                  labels: dict[str, str], labels_csv: Path) -> None:
     removed_dir.mkdir(exist_ok=True)
-    shutil.move(str(path), str(removed_dir / path.name))
+    shutil.move(path, removed_dir / path.name)
     if path.name in labels:
         del labels[path.name]
         save_labels(labels_csv, labels)

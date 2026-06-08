@@ -21,9 +21,10 @@ def test_payload_to_text_ascii_and_fallback():
 
 def test_labels_roundtrip_and_sorted(tmp_path):
     p = tmp_path / "labels.csv"
-    save_labels(p, {"b.png": "2", "a.png": "1"})
-    assert p.read_text().splitlines() == ["file,payload", "a.png,1", "b.png,2"]
-    assert load_labels(p) == {"a.png": "1", "b.png": "2"}
+    save_labels(p, {"b.png": "2", "a.png": "1", "c.png": "RACK,A1"})
+    assert p.read_text().splitlines() == ["file,payload", "a.png,1", "b.png,2", 'c.png,"RACK,A1"']
+    assert load_labels(p) == {"a.png": "1", "b.png": "2", "c.png": "RACK,A1"}
+    assert load_labels(p)["c.png"] == "RACK,A1"
 
 def test_load_missing_file_is_empty(tmp_path):
     assert load_labels(tmp_path / "nope.csv") == {}

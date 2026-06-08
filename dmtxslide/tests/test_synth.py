@@ -1,6 +1,7 @@
 """Tests for the synthetic degradation model (synth.py)."""
 import random
 
+import cv2
 import numpy as np
 
 from dmtxslide import synth
@@ -101,3 +102,17 @@ def test_degrade_routes_crowding_through_margin():
     b = synth.degrade(grid, p_yes, random.Random(0))
     assert b.shape[0] > a.shape[0] and b.shape[1] > a.shape[1], \
         "crowding should add a quiet-zone margin, not draw over the code"
+
+
+def test_render_is_1px_module_binary_and_round_trips():
+    grid = synth.render(b"S25-04821-A3")
+    assert grid.ndim == 2 and grid.dtype == np.uint8
+    assert set(np.unique(grid)).issubset({0, 255})
+    big = cv2.resize(grid, None, fx=8, fy=8, interpolation=cv2.INTER_NEAREST)
+    assert Reader().read(big).payload == b"S25-04821-A3"
+
+
+def test_render_payload_pool_spans_multiple_symbol_sizes():
+    from bench.harness import _payload_pool
+    sizes = {synth.render(p).shape for p in _payload_pool()}
+    assert len(sizes) >= 3, f"only {len(sizes)} symbol size(s): {sizes}"

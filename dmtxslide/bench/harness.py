@@ -28,7 +28,6 @@ import cv2
 
 from dmtxslide.reader import Reader
 from dmtxslide.synth import strata
-from dmtxslide.validate import AcceptAny
 
 
 def _payload_pool() -> list[bytes]:
@@ -75,21 +74,21 @@ def run(items, budget_ms: float, dump_failures: str | None = None):
     """Run the reader over items. If dump_failures is a directory, every cell
     that is not a correct decode is saved there — so a failure can be inspected
     and a reader miss told apart from an impossible/buggy synthetic sample."""
-    reader = Reader(validator=AcceptAny())
+    reader = Reader()
     if dump_failures:
         Path(dump_failures).mkdir(parents=True, exist_ok=True)
     rows = []
     for idx, (stratum, truth, img) in enumerate(items):
         r = reader.read(img, budget_ms=budget_ms)
         correct = bool(r.ok and (truth is None or r.payload == truth))
-        # best stage reached across candidates (for the found-vs-decoded split)
-        found = any(t.found for _, res in r.candidate_traces for t in res.trace)
+        # zxing 2-stage: no separate localization; found == decoded
+        found = r.ok
         if dump_failures and not correct:
             outcome = "wrong" if r.ok else "miss"
             cv2.imwrite(str(Path(dump_failures) / _failure_slug(stratum, idx, outcome)), img)
         rows.append({
             "stratum": stratum, "correct": correct, "decoded": r.ok,
-            "found": found, "rung": r.rung, "ms": r.elapsed_ms,
+            "found": found, "stage": r.stage, "ms": r.elapsed_ms,
             "truth": truth.decode() if truth else None,
             "got": r.payload.decode("latin1") if r.payload else None,
         })

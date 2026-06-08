@@ -1,7 +1,7 @@
 """Synthetic, distribution-controlled test data — the PRIMARY optimisation
 surface for a source-agnostic reader.
 
-We render known payloads with libdmtx's own encoder, then push them through a
+We render known payloads with zxing-cpp's encoder, then push them through a
 parametric degradation model spanning the axes you want to generalise across:
 module size, blur, ink gain/dropout, label colour, rotation, noise. This gives
 arbitrarily many perfectly-labelled samples from printers/colours/sizes you
@@ -17,7 +17,9 @@ from dataclasses import dataclass, field
 import cv2
 import numpy as np
 
-from . import binding
+import zxingcpp
+
+_DM = zxingcpp.BarcodeFormat.DataMatrix
 
 
 @dataclass(frozen=True)
@@ -35,8 +37,11 @@ class DegradeParams:
 
 
 def render(payload: bytes) -> np.ndarray:
-    """Clean 1px-module grid (0/255)."""
-    return binding.encode(payload, module_size=1, margin=2)
+    """Clean 1px-module DataMatrix grid (0/255), encoded by zxing-cpp.
+
+    Passing bytes yields a tight 1-pixel-per-module bitmap with zxing's quiet
+    zone; synth.degrade adds its own scaling/border/crowding on top."""
+    return np.asarray(zxingcpp.create_barcode(payload, _DM).to_image()).copy()
 
 
 # Accession-style strings used to crowd the quiet zone, modelled on real

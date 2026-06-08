@@ -60,23 +60,17 @@ Measured safe rules (a black bar can break decoding only if it touches the code)
 
 ## Environment rebuild (after the move)
 
-Native dep (already installed system-wide; unaffected by a new *disk* on the same Mac):
-`brew install libdmtx` (headers at /opt/homebrew). Python 3.12 (3.14 has no opencv wheel).
+Python 3.12 (3.14 has no opencv wheel). No native system dependencies required.
 
 ```bash
 cd <newpath>/dmtxslide
 # .venv is NOT relocatable (absolute paths baked in) — recreate it:
 rm -rf .venv
 python3.12 -m venv .venv
-.venv/bin/pip install -e ".[compare]" setuptools pytest
-# Native cffi shim: if you COPIED the dir, src/dmtxslide/_dmtx.*.so already works
-# (it's path-independent). If you fresh-cloned, rebuild it:
-CPATH=/opt/homebrew/include LIBRARY_PATH=/opt/homebrew/lib .venv/bin/python -m dmtxslide._build_dmtx
-# BUILD QUIRK: the .so lands in ./dmtxslide/_dmtx.*.so (cwd-relative). Move it:
-mv dmtxslide/_dmtx.*.so src/dmtxslide/    # then rm the stray dmtxslide/ build dir
+.venv/bin/pip install -e . pytest
+# zxing-cpp ships as a pip wheel; no native build step.
 # verify:
-.venv/bin/python -m pytest tests/         # expect 6 passed
-.venv/bin/python -c "from dmtxslide._dmtx import ffi,lib; print('shim ok')"
+.venv/bin/python -m pytest tests/         # expect 28 passed
 ```
 
 ## Reproduce the key results
@@ -105,9 +99,9 @@ mv dmtxslide/_dmtx.*.so src/dmtxslide/    # then rm the stray dmtxslide/ build d
 
 ## Key files
 
-- `src/dmtxslide/` — reader, cascade, localize, adapt, binding (staged libdmtx), synth, validate
+- `src/dmtxslide/` — reader (zxing-cpp 2-stage cascade), synth, validate
 - `bench/harness.py` — stratified read-rate bench (+ `--dump-failures`)
 - `tools/compare_backends.py` — the 3-fold decoder comparison
 - `tools/import_barber.py` — BarBeR zip -> DataMatrix corpus
 - `tools/dump_synth_samples.py` — materialize synth images to disk
-- `tests/` — 6 tests (synth crowding/ink-fairness/non-degeneracy, payload spread, failure-dump)
+- `tests/` — 28 tests (reader raw/clahe stages, synth crowding/ink-fairness/non-degeneracy + encoder round-trip, payload spread, failure-dump, label_gt, corpus loader)

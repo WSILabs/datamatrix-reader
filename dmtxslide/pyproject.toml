@@ -1,25 +1,13 @@
 [build-system]
-requires = ["setuptools>=68", "cffi>=1.16"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "dmtxslide"
 version = "0.0.1"
-description = "Adaptive, source-agnostic DataMatrix reader built on libdmtx (slide-label domain)"
+description = "Source-agnostic DataMatrix reader for slide labels (zxing-cpp core)"
 requires-python = ">=3.10"
-dependencies = ["cffi>=1.16", "numpy>=1.24", "opencv-python-headless>=4.8"]
-
-[project.optional-dependencies]
-# Alternative decode backend, used by tools/compare_backends.py to A/B against
-# libdmtx. Not required by the core reader. Install: pip install -e ".[compare]"
-compare = ["zxing-cpp>=2.0"]
+dependencies = ["numpy>=1.24", "opencv-python-headless>=4.8", "zxing-cpp>=2.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.package-data]
-dmtxslide = ["*.so"]
-
-# Build the native shim once after install:
-#   python -m dmtxslide._build_dmtx
-# Requires libdmtx headers (apt: libdmtx-dev; brew: libdmtx).

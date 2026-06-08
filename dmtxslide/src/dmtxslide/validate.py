@@ -1,9 +1,9 @@
-"""Validators gate the cascade's early exit.
+"""Optional payload validators for callers that want format-level gating.
 
-A decode is only "success" if it's *valid*, so the cascade never stops on a
-plausible-but-wrong read and a misformatted decode counts as a miss in the
-harness. The default accepts anything; supply a real one for your accession
-format so the benchmark measures correctness, not just "some bytes came back".
+A decode is only "success" if it's *valid*: a misformatted decode counts as a
+miss, not just "some bytes came back". The default accepts anything; supply a
+real one for your accession format to measure correctness. These are an
+application-layer concern — the zxing Reader does not consult them.
 """
 from __future__ import annotations
 

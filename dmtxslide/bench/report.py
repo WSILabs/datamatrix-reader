@@ -1,7 +1,7 @@
 """Compare two harness runs and surface which strata moved.
 
 A config change is only an improvement if it lifts a weak stratum without
-regressing others — adding a cascade rung is justified by Pareto, not by mean.
+regressing others — a reader change is justified by Pareto, not by mean.
 
 Usage:  python -m bench.report runs/before.json runs/after.json
 """

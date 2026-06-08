@@ -1,5 +1,8 @@
 from __future__ import annotations
+import argparse
 import csv, cv2, shutil
+import tkinter as tk
+from tkinter import messagebox
 from pathlib import Path
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
@@ -79,3 +82,80 @@ def autofill(image_dir: Path, labels: dict[str, str], budget: int,
             queue.append((p, [payload_to_text(v) for v in vals]))
     save_labels(csv_path, labels)
     return {"added": added, "queue": queue}
+
+
+def run_gui(queue, image_dir: Path, removed_dir: Path,
+            labels: dict[str, str], csv_path: Path, scale: float) -> None:
+    """Show each queued image at `scale` and collect a payload or a delete."""
+    factor = max(1, round(1 / scale))      # 0.5 -> subsample(2); stdlib only
+    root = tk.Tk()
+    root.title("wsi_labels GT")
+    state = {"i": 0}
+    img_label = tk.Label(root)
+    img_label.pack()
+    hint = tk.Label(root, fg="#666"); hint.pack()
+    entry = tk.Entry(root, width=40); entry.pack()
+    counter = tk.Label(root); counter.pack()
+    photo = {"ref": None}                  # keep a ref so Tk doesn't GC it
+
+    def show():
+        i = state["i"]
+        if i >= len(queue):
+            root.destroy(); return
+        path, candidates = queue[i]
+        photo["ref"] = tk.PhotoImage(file=str(path)).subsample(factor)
+        img_label.config(image=photo["ref"])
+        hint.config(text=("candidates: " + "   ".join(candidates)) if candidates else "")
+        counter.config(text=f"{i + 1} / {len(queue)}   ({path.name})")
+        entry.delete(0, tk.END)
+        entry.focus_set()
+
+    def save(_=None):
+        val = entry.get().strip()
+        if not val:
+            messagebox.showwarning("Empty", "Enter a payload, or use Delete.")
+            return
+        path, _c = queue[state["i"]]
+        labels[path.name] = val
+        save_labels(csv_path, labels)
+        state["i"] += 1; show()
+
+    def delete():
+        path, _c = queue[state["i"]]
+        delete_image(path, removed_dir, labels, csv_path)
+        state["i"] += 1; show()
+
+    def nav(d):
+        state["i"] = max(0, min(len(queue) - 1, state["i"] + d)); show()
+
+    tk.Button(root, text="Save ⏎", command=save).pack(side="left")
+    tk.Button(root, text="Delete - no barcode", command=delete).pack(side="left")
+    tk.Button(root, text="Prev", command=lambda: nav(-1)).pack(side="left")
+    tk.Button(root, text="Next", command=lambda: nav(1)).pack(side="left")
+    root.bind("<Return>", save)
+    show()
+    root.mainloop()
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--corpus", required=True)
+    ap.add_argument("--budget", type=int, default=250)
+    ap.add_argument("--scale", type=float, default=0.5)
+    args = ap.parse_args()
+
+    image_dir = Path(args.corpus)
+    removed_dir = image_dir.parent / (image_dir.name + "_removed")
+    csv_path = image_dir / "labels.csv"
+    labels = load_labels(csv_path)
+    before = len(labels)
+    res = autofill(image_dir, labels, args.budget)
+    print(f"auto-filled {res['added']}  (already had {before})  "
+          f"queue {len(res['queue'])}")
+    if res["queue"]:
+        run_gui(res["queue"], image_dir, removed_dir, labels, csv_path, args.scale)
+    print(f"labels.csv now has {len(load_labels(csv_path))} rows -> {csv_path}")
+
+
+if __name__ == "__main__":
+    main()

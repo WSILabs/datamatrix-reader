@@ -37,5 +37,9 @@ corpus/barber/images/
 dmtxslide/corpus/pathology_samples/
 corpus/pathology_samples/
 
+# Real Grundium WSI slide labels — PHI (filenames contain accession numbers). NEVER commit.
+dmtxslide/corpus/wsi_labels/
+corpus/wsi_labels/
+
 # macOS
 .DS_Store

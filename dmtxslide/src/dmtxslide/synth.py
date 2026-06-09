@@ -151,6 +151,93 @@ AXES = {
 }
 
 
+@dataclass(frozen=True)
+class SceneParams:
+    canvas: tuple = (900, 700)          # (H, W) label canvas
+    cell: float = 14.0                  # px per module (scale axis)
+    pos: tuple = (0.5, 0.5)             # code CENTER as (fx, fy) fraction of canvas
+    rotation_deg: float = 0.0           # cardinal {0,90,180,270} + skew applied on top
+    skew_deg: float = 0.0               # |skew| <= ~20 (slide tolerance)
+    substrate_bgr: tuple = (255, 255, 255)
+    print_bgr: tuple = (10, 10, 10)
+    text: bool = True                   # adjacent accession text clutter
+    edges: bool = False                 # straight slide/label edge (dark bar)
+    chip: bool = False                  # bright glass-chip blob on the finder
+    defects: bool = False               # half-printed top timing + nicked finder
+    blur_sigma: float = 0.0
+    noise_sigma: float = 0.0
+
+
+def _square_dark(payload: bytes) -> np.ndarray:
+    """MxM bool dark grid for a payload that encodes square; raises if none."""
+    a = render(payload)                 # (M+2, M+2) incl 1px quiet
+    if a.shape[0] != a.shape[1]:
+        raise ValueError("payload does not encode to a square DataMatrix")
+    return a[1:-1, 1:-1] < 128
+
+
+def _apply_border_defects(dark: np.ndarray, rng: random.Random) -> np.ndarray:
+    """Model the real WSI border failure: erase the top timing row and nick the
+    finder L. Data interior untouched."""
+    M = dark.shape[0]
+    d = dark.copy()
+    d[0, :] = False                     # top timing row prints half-height -> sampled white
+    d[:, -1] = False                    # right timing col damaged
+    i = rng.randint(1, M - 5)
+    d[i:i + 3, 0] = False               # chip nick on the left finder arm
+    return d
+
+
+def scene(payload: bytes, p: SceneParams, rng: random.Random):
+    """Render a square code onto a label canvas at p.pos / p.cell / rotation, with
+    optional confounders. Returns (bgr_uint8, truth) where truth = {payload, cx, cy,
+    size, angle, M}. Truth geometry is the code's center, side length, and net angle."""
+    H, W = p.canvas
+    dark = _square_dark(payload)
+    if p.defects:
+        dark = _apply_border_defects(dark, rng)
+    M = dark.shape[0]
+    grid = np.where(dark, 0, 255).astype(np.uint8)
+    tile = cv2.resize(grid, None, fx=p.cell, fy=p.cell, interpolation=cv2.INTER_NEAREST)
+    sub = np.array(p.substrate_bgr, np.float32) / 255.0
+    ink = np.array(p.print_bgr, np.float32) / 255.0
+    tnorm = tile.astype(np.float32) / 255.0
+    tile_bgr = ((tnorm[..., None] * sub + (1 - tnorm[..., None]) * ink) * 255).astype(np.uint8)
+    side = tile_bgr.shape[0]
+    canvas = np.full((H, W, 3), p.substrate_bgr, np.uint8)
+    if p.edges:                          # a dark slide/label edge bar down one side
+        canvas[:, :max(6, W // 40)] = (20, 20, 20)
+    cx, cy = int(p.pos[0] * W), int(p.pos[1] * H)
+    ang = p.rotation_deg + p.skew_deg
+    Rm = cv2.getRotationMatrix2D((side / 2, side / 2), ang, 1.0)
+    cos, sin = abs(Rm[0, 0]), abs(Rm[0, 1])
+    nw, nh = int(side * cos + side * sin), int(side * sin + side * cos)
+    Rm[0, 2] += nw / 2 - side / 2
+    Rm[1, 2] += nh / 2 - side / 2
+    rot = cv2.warpAffine(tile_bgr, Rm, (nw, nh), borderValue=tuple(map(int, p.substrate_bgr)))
+    if p.text:
+        fs = max(0.4, p.cell / 22.0)
+        cv2.putText(canvas, rng.choice(ACCESSION_SAMPLES),
+                    (max(0, cx - side), min(H - 4, cy + side)),
+                    cv2.FONT_HERSHEY_SIMPLEX, fs, tuple(map(int, p.print_bgr)),
+                    max(1, int(fs * 1.6)), cv2.LINE_AA)
+    y0, x0 = cy - nh // 2, cx - nw // 2
+    ys, xs = max(0, y0), max(0, x0)
+    ye, xe = min(H, y0 + nh), min(W, x0 + nw)
+    canvas[ys:ye, xs:xe] = rot[ys - y0:ye - y0, xs - x0:xe - x0]
+    if p.chip:                           # bright glass-chip blob over the finder corner
+        cv2.circle(canvas, (cx - side // 2, cy), max(8, side // 14), (235, 235, 235), -1)
+    if p.blur_sigma > 0:
+        canvas = cv2.GaussianBlur(canvas, (0, 0), p.blur_sigma)
+    if p.noise_sigma > 0:
+        canvas = (canvas.astype(np.float32) + np.random.default_rng(
+            rng.randint(0, 1 << 30)).normal(0, p.noise_sigma, canvas.shape)
+        ).clip(0, 255).astype(np.uint8)
+    truth = {"payload": payload, "cx": float(cx), "cy": float(cy),
+             "size": float(side), "angle": float(ang), "M": int(M)}
+    return canvas, truth
+
+
 def strata(payloads: list[bytes], *, seed: int = 0, per_cell: int = 1):
     """Yield (stratum:dict, payload:bytes, image:np.ndarray) across the grid.
 

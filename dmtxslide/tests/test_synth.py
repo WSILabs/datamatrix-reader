@@ -116,3 +116,36 @@ def test_render_payload_pool_spans_multiple_symbol_sizes():
     from bench.harness import _payload_pool
     sizes = {synth.render(p).shape for p in _payload_pool()}
     assert len(sizes) >= 3, f"only {len(sizes)} symbol size(s): {sizes}"
+
+
+import zxingcpp
+from dmtxslide.register import _zxing
+
+_DM = zxingcpp.BarcodeFormat.DataMatrix
+
+
+def _square_payload():
+    for t in (b"DMTXSLIDE-SCENE-TEST-01", b"ABCDEFGHIJKLMNOPQRSTUVWX"):
+        a = np.asarray(zxingcpp.create_barcode(t.decode(), _DM).to_image())
+        if a.shape[0] == a.shape[1]:
+            return t
+    raise AssertionError("no square payload")
+
+
+def test_scene_places_code_and_reports_truth():
+    rng = random.Random(0)
+    payload = _square_payload()
+    p = synth.SceneParams(canvas=(900, 700), cell=14, pos=(0.7, 0.3),
+                          rotation_deg=90.0, chip=False, edges=False,
+                          defects=False, text=True)
+    img, truth = synth.scene(payload, p, rng)
+    assert img.ndim == 3 and img.shape[0] >= 700
+    assert 0 <= truth["cx"] < img.shape[1] and 0 <= truth["cy"] < img.shape[0]
+    assert truth["payload"] == payload
+    assert abs(truth["size"] - 14 * truth["M"]) < 14 * 2
+    g = img[..., 0] if img.ndim == 3 else img
+    s = int(truth["size"]); cx, cy = int(truth["cx"]), int(truth["cy"])
+    crop = g[max(0, cy - s):cy + s, max(0, cx - s):cx + s]
+    import cv2
+    up = cv2.resize(crop, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    assert _zxing(up) == payload

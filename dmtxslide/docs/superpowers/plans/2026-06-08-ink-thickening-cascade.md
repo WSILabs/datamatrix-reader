@@ -1,5 +1,11 @@
 # Progressive Ink-Thickening Cascade Implementation Plan
 
+> **STATUS: IMPLEMENTED (commit e4a66f6).** Final design evolved during exploration:
+> the fixed `ink1/ink2` ladder below became an escalating thickening loop
+> (`clahe → thick_u{2,4}_i{1,2,3} → sauv`), verified **0.983 (397/404), WRONG=0**.
+> Ignore any "0.988" (a retracted double-count error). preprocess.py + reader.py
+> implement it; 40 tests pass.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add full-frame, fallback-only ink-thickening stages to `Reader` so it recovers faint DataMatrix codes — 0.926 → **0.975** on the real WSI labels, open/no-commercial, zero false decodes.

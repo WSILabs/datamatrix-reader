@@ -1,5 +1,11 @@
 # Progressive ink-thickening fallback cascade — design
 
+> **STATUS: IMPLEMENTED (commit e4a66f6), feat/ink-cascade.** Final shipped design =
+> raw → clahe → escalating ink-thickening (up2/up4 × erode 1–3 iters) → sauvola,
+> verified **0.983 (397/404), WRONG=0**. NOTE: any "0.988" below is a retracted
+> double-count error (union-ceiling miscounted against a different cascade base);
+> the real ceiling is 0.980–0.983. See [[ink-thickening-cascade-current-best]].
+
 **Date:** 2026-06-08
 **Status:** approved (brainstorming) → ready for implementation plan
 **Builds on:** the zxing re-anchor (`Reader` is a 2-stage zxing cascade).

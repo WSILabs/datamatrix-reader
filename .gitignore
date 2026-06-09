@@ -47,3 +47,7 @@ corpus/wsi_labels_removed/
 
 # macOS
 .DS_Store
+
+# Dynamsoft trial license key — never commit
+.dynamsoft_license
+dmtxslide/.dynamsoft_license

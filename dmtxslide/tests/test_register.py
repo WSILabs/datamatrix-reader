@@ -87,3 +87,12 @@ def test_decode_auto_returns_none_on_blank():
     blank = np.full((400, 400), 255, np.uint8)
     got, params = decode_auto(blank)
     assert got is None and params is None
+
+
+def test_decode_auto_uses_two_detectors():
+    # the decode path must no longer call detect_dark_region
+    import inspect
+    from dmtxslide import register
+    src = inspect.getsource(register.decode_auto)
+    assert "detect_dark_region" not in src
+    assert "detect_area" in src and "detect_data_region" in src

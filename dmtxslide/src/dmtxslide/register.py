@@ -6,14 +6,16 @@ only missing piece is the module-grid registration. So we localize the code, reg
 grid, REPAINT the canonical finder/timing, and let zxing do ECC200 + Reed-Solomon
 (ECC-validated → a wrong fit fails safe, never mis-reads).
 
-Localization takes the UNION of three complementary detectors (each catches what the
-others miss; none alone exceeds ~4/7 on the WSI residual):
+Localization takes the UNION of two complementary detectors (ablation confirmed
+detect_dark_region adds 0 unique recoveries over the pair below):
   • gradient anisotropy — min(|Sobel_x|, |Sobel_y|): a 2D module grid has gradient in
     BOTH directions; ANY straight edge (slide rim, label border, glass-chip boundary)
     has it in one direction only, so min≈0 there → rejected by construction. Smooth
     glare is low-gradient → a hole, not a centroid pull.
-  • dark-ink extent — precise center when the finder L is intact.
   • data-region texture — works when the finder L is broken/obscured.
+
+detect_dark_region remains defined (importable for ablation harnesses) but is NOT
+called from decode_auto.
 
 The L is found INSIDE each candidate by the solid-side test (l_orientations): the two
 adjacent edge strips reading ~90-100% dark are the finder L; the ~50% strips are timing.
@@ -183,11 +185,10 @@ def l_orientations(grid):
 
 
 def decode_auto(gray):
-    """Detect (union of 3 detectors) + register + find-L + repaint-border + decode an
+    """Detect (union of 2 detectors) + register + find-L + repaint-border + decode an
     already-isolated, crop-scale grayscale image. Returns (payload, params) or
     (None, None). ECC-validated → never returns a wrong payload."""
     regions = [r for r in (detect_area(gray),
-                           detect_dark_region(gray),
                            detect_data_region(gray)) if r]
     for cx, cy, te, ang in regions:
         for M in SIZES:

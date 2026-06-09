@@ -15,11 +15,14 @@ from dmtxslide.reader import Reader
 
 def main():
     corpus = Path("corpus/wsi_labels")
+    # crops are named scanNNN.png, so GT must be keyed by scan number here; the
+    # manual_L_fix scans are unique, but scan numbers are NOT globally unique
+    # (scan_180 is two slides) — setdefault avoids a silent wrong-row overwrite.
     gt = {}
     for r in csv.DictReader((corpus / "labels.csv").open(newline="")):
         m = re.search(r"scan_(\d+)_", r["file"])
         if m:
-            gt[m.group(1)] = r["payload"].encode()
+            gt.setdefault(m.group(1), r["payload"].encode())
     rd = Reader()
     folder = corpus / "manual_L_fix" / "edited"   # the repaired copies
     files = sorted(folder.glob("*.png"))

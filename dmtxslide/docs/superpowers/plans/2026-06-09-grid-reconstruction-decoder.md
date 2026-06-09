@@ -1,5 +1,10 @@
 # DataMatrix Grid-Reconstruction Decoder Implementation Plan
 
+> **OUTCOME: BUILT & SHELVED.** Tasks 1–5 done; the Task-5 corpus gate failed
+> (2/404 on real WSI, recovers 0 residual — `localize` doesn't transfer to real
+> labels). Task 7 (integration) skipped per the gate. Code on branch
+> `feat/grid-decode` (shelved, not merged). See [[grid-reconstruction-shelved]].
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A standalone `griddecode.decode(image)` that recovers broken-finder DataMatrix codes the ink cascade misses, by reconstructing a clean module matrix and delegating layout + Reed–Solomon to zxing — validated on the full 404 corpus with WRONG=0 as the gate.

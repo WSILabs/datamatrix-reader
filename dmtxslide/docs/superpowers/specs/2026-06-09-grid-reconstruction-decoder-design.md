@@ -1,5 +1,13 @@
 # DataMatrix grid-reconstruction decoder — design
 
+> **OUTCOME: BUILT & SHELVED (2026-06-09).** The render→zxing keystone works and the
+> decoder recovers finder-erased *synthetic* codes (ECC-safe, WRONG=0). But the
+> Task-5 corpus gate failed: **2/404 on the real WSI corpus, recovers 0 residual** —
+> `localize` doesn't transfer to real busy labels (quad on ~7/20 trivially-readable
+> codes). NOT integrated. Implementation lives on branch `feat/grid-decode` (shelved).
+> Revisit needs a robust real-image code-region detector. See
+> [[grid-reconstruction-shelved]].
+
 **Date:** 2026-06-09
 **Status:** approved (brainstorming) → ready for implementation plan
 **Builds on:** the ink-thickening cascade (Reader reaches 0.983; the residual ~8 are

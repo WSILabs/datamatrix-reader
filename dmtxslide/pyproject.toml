@@ -9,5 +9,10 @@ description = "Source-agnostic DataMatrix reader for slide labels (zxing-cpp cor
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24", "opencv-python-headless>=4.8", "zxing-cpp>=2.0"]
 
+[project.optional-dependencies]
+# GUI experiment tools (tools/paint_l.py manual finder-repair editor). Not needed
+# by the reader. Install: pip install -e ".[tools]"
+tools = ["pillow>=10"]
+
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -3,9 +3,11 @@ import random
 
 import cv2
 import numpy as np
+import zxingcpp
 
 from dmtxslide import synth
 from dmtxslide.reader import Reader
+from dmtxslide.register import _zxing
 
 
 def _contrast(substrate_ink):
@@ -118,9 +120,6 @@ def test_render_payload_pool_spans_multiple_symbol_sizes():
     assert len(sizes) >= 3, f"only {len(sizes)} symbol size(s): {sizes}"
 
 
-import zxingcpp
-from dmtxslide.register import _zxing
-
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 
 
@@ -146,6 +145,5 @@ def test_scene_places_code_and_reports_truth():
     g = img[..., 0] if img.ndim == 3 else img
     s = int(truth["size"]); cx, cy = int(truth["cx"]), int(truth["cy"])
     crop = g[max(0, cy - s):cy + s, max(0, cx - s):cx + s]
-    import cv2
     up = cv2.resize(crop, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
     assert _zxing(up) == payload

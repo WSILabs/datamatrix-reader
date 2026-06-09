@@ -191,7 +191,9 @@ def _apply_border_defects(dark: np.ndarray, rng: random.Random) -> np.ndarray:
 def scene(payload: bytes, p: SceneParams, rng: random.Random):
     """Render a square code onto a label canvas at p.pos / p.cell / rotation, with
     optional confounders. Returns (bgr_uint8, truth) where truth = {payload, cx, cy,
-    size, angle, M}. Truth geometry is the code's center, side length, and net angle."""
+    size, angle, M}. Truth geometry is the code's center, side length, and net angle.
+    ``size`` is the unrotated tile's pixel side (= cell * M); for non-cardinal skew
+    angles the on-canvas bounding box will be larger than ``size``."""
     H, W = p.canvas
     dark = _square_dark(payload)
     if p.defects:

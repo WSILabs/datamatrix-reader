@@ -22,10 +22,11 @@ adjacent edge strips reading ~90-100% dark are the finder L; the ~50% strips are
 That orders the 4 orientations (loose gate; ECC stays the arbiter) and tolerates a
 ~90%-intact L.
 
-`recover()` is the Reader entry point: it crops to the consensus code-ROI (a spatial
-prior — these labels place the code in the upper-left) and upscales, which puts the small
-full-label code at the scale `decode_auto` expects. The ROI/size priors are calibrated to
-the Grundium WSI label format; the detectors and L-test themselves are format-agnostic.
+`recover()` is the Reader entry point: it uses `locate.propose` to find candidate code
+regions ANYWHERE on the label at any scale, normalizes each candidate to a canonical
+size, and runs `decode_auto` on it. This is format-agnostic — the code can be anywhere
+on the label, not just the upper-left. The detectors and L-test themselves are also
+format-agnostic.
 Speed is not optimized (fallback-only; runs on a cascade miss); likely ports to C later.
 """
 from __future__ import annotations
@@ -34,13 +35,13 @@ import cv2
 import numpy as np
 import zxingcpp
 
+from .locate import propose
+
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 SIZES = (22, 18, 20, 24)            # candidate square ECC200 sizes, common-first
 
-# Consensus code-ROI as fractions of (W, H): the WSI label places the DataMatrix in the
-# upper-left; from the 350-readable-code position study (x≈0.20±0.05, y≈0.32±0.06). The
-# box is generous (~1.6× the code) so small per-label shifts stay inside it.
-ROI_FRAC = (0.03, 0.36, 0.09, 0.55)   # x0, x1, y0, y1
+CANON = 470          # canonical normalized code side (px); detectors are tuned for this
+_MARGIN = 0.6        # crop margin around a proposal, as a fraction of its size
 
 
 def _zxing(img: np.ndarray) -> bytes | None:
@@ -214,15 +215,27 @@ def decode_auto(gray):
     return None, None
 
 
-def recover(gray: np.ndarray, upscale: int = 2) -> bytes | None:
-    """Reader fallback: crop to the consensus code-ROI and upscale (putting the small
-    full-label code at the crop scale decode_auto expects), then decode_auto. Returns the
-    payload bytes or None. ECC-validated → safe."""
-    H, W = gray.shape
-    x0f, x1f, y0f, y1f = ROI_FRAC
-    crop = gray[int(y0f * H):int(y1f * H), int(x0f * W):int(x1f * W)]
+def _normalize(gray, cx, cy, size):
+    """Crop a window around a proposal and scale so the code is ~CANON px."""
+    half = int(size * (0.5 + _MARGIN))
+    y0, y1 = max(0, int(cy) - half), min(gray.shape[0], int(cy) + half)
+    x0, x1 = max(0, int(cx) - half), min(gray.shape[1], int(cx) + half)
+    crop = gray[y0:y1, x0:x1]
     if crop.size == 0:
         return None
-    up = cv2.resize(crop, None, fx=upscale, fy=upscale, interpolation=cv2.INTER_CUBIC)
-    payload, _ = decode_auto(up)
-    return payload
+    f = CANON / max(1.0, size)
+    return cv2.resize(crop, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC)
+
+
+def recover(gray):
+    """Reader fallback: propose candidate code regions anywhere on the label, normalize
+    each to canonical scale, and run the repair decoder. Returns payload bytes or None.
+    ECC-validated -> safe."""
+    for cx, cy, size, _ in propose(gray):
+        up = _normalize(gray, cx, cy, size)
+        if up is None:
+            continue
+        payload, _ = decode_auto(up)
+        if payload is not None:
+            return payload
+    return None

@@ -15,6 +15,10 @@ PYRAMID_SCALES = (1.0, 0.7, 0.5, 0.35)
 _MIN_SIDE = 40          # reject sub-40px blobs at a level
 _MAX_AR = 1.3           # square-ish
 _MIN_FILL = 0.4
+# Fine morphology pass at scale=1.0: smaller kernels isolate code sub-blobs in busy labels
+# where the code texture merges into a larger blob under the coarse (7,21) pass.
+_FINE_OPEN = 5
+_FINE_CLOSE = 15
 
 
 def _kernel(n):
@@ -28,14 +32,14 @@ def _density(gray):
     return np.sqrt(np.maximum(var, 0.0))
 
 
-def _level_candidates(gray, scale):
+def _level_candidates(gray, scale, open_k=7, close_k=21):
     lvl = (gray if scale == 1.0 else
            cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA))
     dens = _density(lvl)
     dn = (dens / (dens.max() + 1e-9) * 255).astype(np.uint8)
     th = cv2.threshold(dn, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    th = cv2.morphologyEx(th, cv2.MORPH_OPEN, _kernel(7))    # drop thin text
-    th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, _kernel(21))  # fill module grid
+    th = cv2.morphologyEx(th, cv2.MORPH_OPEN, _kernel(open_k))    # drop thin text
+    th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, _kernel(close_k))  # fill module grid
     cnts, _ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     out = []
     for c in cnts:
@@ -70,4 +74,7 @@ def propose(gray):
     cands = []
     for sc in PYRAMID_SCALES:
         cands.extend(_level_candidates(gray, sc))
+    # Fine-morphology pass at native scale: catches sub-blobs in busy labels where the
+    # code texture merges with surrounding text under the coarse (7,21) pass.
+    cands.extend(_level_candidates(gray, 1.0, open_k=_FINE_OPEN, close_k=_FINE_CLOSE))
     return [(cx, cy, size, ang) for cx, cy, size, ang, _ in _dedup(cands)]

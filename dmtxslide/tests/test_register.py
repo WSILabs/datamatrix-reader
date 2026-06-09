@@ -96,3 +96,21 @@ def test_decode_auto_uses_two_detectors():
     src = inspect.getsource(register.decode_auto)
     assert "detect_dark_region" not in src
     assert "detect_area" in src and "detect_data_region" in src
+
+
+def test_recover_decodes_offcenter_scene():
+    import random
+    from dmtxslide import synth
+    from dmtxslide.register import recover
+    rng = random.Random(3)
+    for t in (b"DMTXSLIDE-RECOVER-TEST", b"ABCDEFGHIJKLMNOPQRSTUVWX"):
+        import zxingcpp
+        a = np.asarray(zxingcpp.create_barcode(t.decode(),
+              zxingcpp.BarcodeFormat.DataMatrix).to_image())
+        if a.shape[0] == a.shape[1]:
+            payload = t; break
+    # code in the lower-right (NOT the old upper-left ROI), with border defects
+    p = synth.SceneParams(canvas=(900, 1100), cell=18, pos=(0.72, 0.68),
+                          rotation_deg=180.0, defects=True, text=True, edges=True)
+    img, truth = synth.scene(payload, p, rng)
+    assert recover(img[..., 0]) == payload

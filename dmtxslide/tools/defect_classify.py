@@ -25,7 +25,8 @@ import cv2
 import numpy as np
 import zxingcpp
 
-from dmtxslide.reader import Reader, _gray, UPSCALE, CLAHE_CLIP, CLAHE_TILE
+from dmtxslide.reader import Reader, _gray
+from dmtxslide import preprocess as pp
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 
@@ -77,8 +78,7 @@ def stage_of(image: np.ndarray, truth: bytes) -> str:
     g = _gray(image)
     if _zx(g) == truth:
         return "raw"
-    up = cv2.resize(g, None, fx=UPSCALE, fy=UPSCALE, interpolation=cv2.INTER_CUBIC)
-    if _zx(cv2.createCLAHE(CLAHE_CLIP, CLAHE_TILE).apply(up)) == truth:
+    if _zx(pp.s_clahe(g)) == truth:
         return "clahe"
     return "none"
 

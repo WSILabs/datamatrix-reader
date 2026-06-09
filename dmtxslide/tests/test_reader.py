@@ -32,3 +32,18 @@ def test_falls_back_to_clahe_stage(monkeypatch):
     r = Reader().read(np.full((50, 50), 255, np.uint8))
     assert r.payload == b"RECOVERED" and r.stage == "clahe"
     assert calls["n"] == 2
+
+def test_falls_back_through_thicken_stages(monkeypatch):
+    # raw + clahe + first thicken miss; the 4th _zxing call hits -> 3rd stage name.
+    seq = iter([None, None, None, b"P"])
+    monkeypatch.setattr(R, "_zxing", lambda g: next(seq))
+    r = Reader().read(np.full((60, 60), 255, np.uint8))
+    assert r.payload == b"P" and r.stage == "thick_u2_i2"   # raw, clahe, u2_i1, u2_i2
+
+def test_stage_transform_error_is_treated_as_miss(monkeypatch):
+    # a stage transform that raises cv2.error must be skipped like a miss, not crash
+    boom = [("clahe", lambda g: (_ for _ in ()).throw(cv2.error("x")))] + list(R.STAGES[1:])
+    monkeypatch.setattr(R, "STAGES", boom)
+    monkeypatch.setattr(R, "_zxing", lambda g: None)        # everything misses
+    r = Reader().read(np.full((60, 60), 255, np.uint8))
+    assert r.payload is None and r.stage is None

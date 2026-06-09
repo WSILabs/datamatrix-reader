@@ -47,3 +47,11 @@ corpus/wsi_labels_removed/
 
 # macOS
 .DS_Store
+
+# Dynamsoft trial license key — never commit
+.dynamsoft_license
+dmtxslide/.dynamsoft_license
+
+# Commercial SDK drops (benchmark-only, never commit)
+dynamsoft-barcode-reader-cpp-*.zip
+*dynamsoft*sdk*

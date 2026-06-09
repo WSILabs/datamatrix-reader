@@ -1,10 +1,11 @@
 """Public API: Reader.read(image, budget_ms).
 
-zxing-cpp is the decode engine. Stage "raw" reads the grayscale image directly;
-on a miss, stage "clahe" retries on a 2x-upscaled, CLAHE-equalised copy — the
-validated recovery for poorly-printed codes (real WSI: 0.87 -> 0.93, with the
-preprocessing paid only on the hard tail). `budget_ms` is accepted for call-site
-compatibility but IGNORED — zxing is fast and uncancellable here.
+zxing-cpp decodes the grayscale image directly (stage "raw"). On a miss, the Reader
+runs an ordered ladder of full-frame preprocessing stages (preprocess.STAGES) that
+progressively thicken faint ink until the code decodes — recovering poorly-printed
+codes (real WSI: 0.926 -> 0.983, validated on that corpus; the stage params may need
+re-checking on fresh captures). Stages run ONLY on a miss, so p50 stays ~3 ms.
+`budget_ms` is accepted for call-site compatibility but IGNORED.
 """
 from __future__ import annotations
 
@@ -15,16 +16,15 @@ import cv2
 import numpy as np
 import zxingcpp
 
+from .preprocess import STAGES
+
 _DM = zxingcpp.BarcodeFormat.DataMatrix
-UPSCALE = 2
-CLAHE_CLIP = 2.0
-CLAHE_TILE = (8, 8)
 
 
 @dataclass
 class ReadResult:
     payload: bytes | None
-    stage: str | None          # "raw" | "clahe" | None
+    stage: str | None          # "raw" | "clahe" | "thick_u{f}_i{it}" | "sauv" | None
     elapsed_ms: float
 
     @property
@@ -37,7 +37,7 @@ def _gray(image: np.ndarray) -> np.ndarray:
 
 
 def _zxing(gray: np.ndarray) -> bytes | None:
-    res = zxingcpp.read_barcodes(gray, formats=_DM)
+    res = zxingcpp.read_barcodes(np.ascontiguousarray(gray), formats=_DM)
     return res[0].bytes if res else None
 
 
@@ -48,9 +48,12 @@ class Reader:
         payload = _zxing(gray)
         stage = "raw" if payload is not None else None
         if payload is None:
-            up = cv2.resize(gray, None, fx=UPSCALE, fy=UPSCALE,
-                            interpolation=cv2.INTER_CUBIC)
-            enhanced = cv2.createCLAHE(CLAHE_CLIP, CLAHE_TILE).apply(up)
-            payload = _zxing(enhanced)
-            stage = "clahe" if payload is not None else None
+            for name, transform in STAGES:
+                try:
+                    cand = _zxing(transform(gray))
+                except cv2.error:
+                    continue           # degenerate image for this transform -> miss
+                if cand is not None:
+                    payload, stage = cand, name
+                    break
         return ReadResult(payload, stage, (time.perf_counter() - t0) * 1000)

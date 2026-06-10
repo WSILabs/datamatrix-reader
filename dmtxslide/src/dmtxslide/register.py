@@ -27,6 +27,11 @@ regions ANYWHERE on the label at any scale, normalizes each candidate to a canon
 size, and runs `decode_auto` on it. This is format-agnostic — the code can be anywhere
 on the label, not just the upper-left. The detectors and L-test themselves are also
 format-agnostic.
+
+The registration search (`_brute_region`) iterates hypotheses most-likely-FIRST
+(center-out from the detection estimate) so early-exit hits the probable registration
+before the unlikely extremes. Coverage is identical to a full sweep — only the iteration
+order changes. ECC-validated → never mis-reads.
 Speed is not optimized (fallback-only; runs on a cascade miss); likely ports to C later.
 """
 from __future__ import annotations
@@ -173,25 +178,6 @@ def detect_area(gray):
     return None if best is None else best[1]
 
 
-# weights tuned in Task 8 against WSI + synthetic; start here.
-_W_L, _W_QUIET, _W_BIMODAL = 1.5, 1.0, 0.5
-
-
-def score_registration(gray, cx, cy, cell, M, deg):
-    """Cheap registration quality score in [~0, 3], NO zxing. Peaks at the true grid:
-      L_solidity   - best of 4 orientations' (left col + bottom row) dark fraction
-      quiet_white  - 1-module ring just OUTSIDE the MxM should be light
-      bimodality   - interior data ~50% dark (not a uniform patch)."""
-    grid = sample_fast(gray, cx, cy, cell, M, deg)
-    l = max((np.rot90(grid, k)[:, 0].mean() + np.rot90(grid, k)[-1, :].mean()) / 2.0
-            for k in range(4))
-    outer = sample_fast(gray, cx, cy, cell, M + 2, deg)      # ring = the M+2 border
-    ring = np.concatenate([outer[0, :], outer[-1, :], outer[:, 0], outer[:, -1]])
-    quiet_white = 1.0 - float(ring.mean())
-    bimodal = 1.0 - abs(float(grid.mean()) - 0.5) * 2.0
-    return _W_L * l + _W_QUIET * quiet_white + _W_BIMODAL * bimodal
-
-
 def l_orientations(grid):
     """Rank the 4 rotations by L-solidity. Each entry (oriented_grid, l, timing): l = mean
     dark of the two arms that would be the finder L (left col + bottom row); timing = mean
@@ -204,13 +190,24 @@ def l_orientations(grid):
     return sorted(out, key=lambda e: -e[1])
 
 
+def _outward(values, center):
+    """Same values, ordered by distance from `center` (most-likely-first) so early-exit
+    hits the probable registration before the unlikely extremes. Coverage is unchanged."""
+    return sorted(values, key=lambda v: abs(v - center))
+
+
 def _brute_region(gray, cx, cy, te, ang):
-    """The exhaustive search (today's decode_auto body) for ONE region — the backstop."""
+    """Exhaustive registration search for ONE region, ordered most-likely-FIRST: the
+    detection's own pitch (te/M), angle (0 offset) and center (0 offset) are tried first,
+    expanding outward. Identical coverage to a full sweep -> recall unchanged; only the
+    iteration order (hence early-exit speed) differs. ECC-validated -> never mis-reads."""
     for M in SIZES:
-        for cell in np.arange(te / (M + 3), te / (M - 1), 0.5):
-            for ddeg in np.arange(-3, 3.01, 1.0):
-                for dcx in np.arange(-1.5, 1.51, 0.375) * cell:
-                    for dcy in np.arange(-1.5, 1.51, 0.375) * cell:
+        cell0 = te / M
+        for cell in _outward(np.arange(te / (M + 3), te / (M - 1), 0.5), cell0):
+            for ddeg in _outward(np.arange(-3, 3.01, 1.0), 0.0):
+                offs = _outward(np.arange(-1.5, 1.51, 0.375) * cell, 0.0)
+                for dcx in offs:
+                    for dcy in offs:
                         grid = sample_fast(gray, cx + dcx, cy + dcy, cell, M, ang + ddeg)
                         for g, lsc, _ in l_orientations(grid):
                             if lsc < 0.6:
@@ -224,45 +221,14 @@ def _brute_region(gray, cx, cy, te, ang):
     return None
 
 
-def register_candidate(gray, cx, cy, te, ang, top_k=4):
-    """Score-guided registration for ONE region, with a brute-force backstop.
-    Coarse-to-fine maximize score_registration over (center, cell, angle) per M; decode
-    the top_k highest-scoring hypotheses; if none decode, fall back to _brute_region."""
-    scored = []
-    for M in SIZES:
-        cell0 = te / M
-        best = (cx, cy, cell0, ang)
-        for step_c, step_cell, step_a in ((0.5 * cell0, 1.0, 1.5), (0.18 * cell0, 0.5, 0.7)):
-            bx, by, bc, ba = best
-            cand = [(bx + dx, by + dy, bc + dc, ba + da)
-                    for dx in (-step_c, 0, step_c) for dy in (-step_c, 0, step_c)
-                    for dc in (-step_cell, 0, step_cell) for da in (-step_a, 0, step_a)]
-            best = max(cand, key=lambda v: score_registration(gray, v[0], v[1], v[2], M, v[3]))
-        s = score_registration(gray, best[0], best[1], best[2], M, best[3])
-        scored.append((s, M, best))
-    scored.sort(key=lambda v: -v[0])
-    for _, M, (rx, ry, rc, ra) in scored[:top_k]:
-        grid = sample_fast(gray, rx, ry, rc, M, ra)
-        for g, lsc, _ in l_orientations(grid):
-            if lsc < 0.6:
-                break
-            try:
-                p = _zxing(render_symbol(g, M))
-            except cv2.error:
-                continue
-            if p is not None:
-                return p
-    return _brute_region(gray, cx, cy, te, ang)        # backstop — recall can't regress
-
-
 def decode_auto(gray):
     """Detect (union of 2 detectors) + register + find-L + repaint-border + decode an
     already-isolated, crop-scale grayscale image. Returns (payload, params) or
     (None, None). ECC-validated → never returns a wrong payload.
-    Uses register_candidate (score-guided, fast) per region, with a brute-force backstop."""
+    Uses _brute_region (most-likely-first exhaustive search) per region."""
     regions = [r for r in (detect_area(gray), detect_data_region(gray)) if r]
     for cx, cy, te, ang in regions:
-        p = register_candidate(gray, cx, cy, te, ang)
+        p = _brute_region(gray, cx, cy, te, ang)
         if p is not None:
             return p, {"region": (round(cx, 1), round(cy, 1), round(te, 1))}
     return None, None

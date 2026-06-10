@@ -98,20 +98,6 @@ def test_decode_auto_uses_two_detectors():
     assert "detect_area" in src and "detect_data_region" in src
 
 
-def test_score_peaks_at_true_registration():
-    from dmtxslide.register import score_registration
-    payload, dark = _square_symbol()          # existing helper -> (payload, MxM bool)
-    M = dark.shape[0]
-    img = _canvas(dark, cell=20, quiet=4)      # existing helper
-    H, W = img.shape
-    cx, cy = W / 2.0, H / 2.0
-    true = score_registration(img, cx, cy, 20.0, M, 0.0)
-    # mis-registered by half a module / wrong pitch / off-center must score lower
-    assert true > score_registration(img, cx + 10, cy, 20.0, M, 0.0)
-    assert true > score_registration(img, cx, cy, 26.0, M, 0.0)
-    assert true > score_registration(img, cx, cy, 20.0, M, 8.0)
-
-
 def test_recover_decodes_offcenter_scene():
     import random
     from dmtxslide import synth
@@ -125,7 +111,7 @@ def test_recover_decodes_offcenter_scene():
     assert recover(img[..., 0]) == payload
 
 
-def test_register_candidate_matches_bruteforce():
+def test_recover_decodes_damaged_scenes():
     import random
     from dmtxslide import synth
     from dmtxslide.register import recover
@@ -137,7 +123,7 @@ def test_register_candidate_matches_bruteforce():
               zxingcpp.BarcodeFormat.DataMatrix).to_image())
         if a.shape[0] == a.shape[1]:
             payload = t; break
-    # several damaged scenes must still decode under the score-guided path
+    # several damaged scenes must still decode
     ok = 0
     for i in range(6):
         p = synth.SceneParams(canvas=(800, 900), cell=16 + i, pos=(0.4, 0.55),
@@ -146,3 +132,18 @@ def test_register_candidate_matches_bruteforce():
         if recover(img[..., 0]) == payload:
             ok += 1
     assert ok >= 5
+
+
+def test_brute_region_order_preserves_recovery():
+    # center-out ordering must not change WHICH codes decode — a damaged off-center
+    # scene that decoded before must still decode.
+    import random
+    from dmtxslide import synth
+    from dmtxslide.register import recover
+    rng = random.Random(11)
+    payload = _square_symbol()[0]
+    p = synth.SceneParams(canvas=(850, 1000), cell=20, pos=(0.6, 0.4),
+                          rotation_deg=270.0, skew_deg=6.0,
+                          defects=True, text=True, edges=True)
+    img, _ = synth.scene(payload, p, rng)
+    assert recover(img[..., 0]) == payload

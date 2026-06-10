@@ -48,9 +48,9 @@ def _zxing_ok(img, payload):
 def test_decode_auto_recovers_clean_code():
     payload, dark = _square_symbol()
     img = _canvas(dark)
-    got, params = decode_auto(img)
+    got, reg = decode_auto(img)
     assert got == payload
-    assert params is not None and "region" in params
+    assert reg is not None and len(reg) == 4  # (cx, cy, side, deg)
 
 
 def test_decode_auto_recovers_broken_border():
@@ -108,7 +108,7 @@ def test_recover_decodes_offcenter_scene():
     p = synth.SceneParams(canvas=(900, 1100), cell=18, pos=(0.72, 0.68),
                           rotation_deg=180.0, defects=True, text=True, edges=True)
     img, truth = synth.scene(payload, p, rng)
-    assert recover(img[..., 0]) == payload
+    assert recover(img[..., 0])[0] == payload
 
 
 def test_recover_decodes_damaged_scenes():
@@ -129,7 +129,7 @@ def test_recover_decodes_damaged_scenes():
         p = synth.SceneParams(canvas=(800, 900), cell=16 + i, pos=(0.4, 0.55),
                               rotation_deg=90.0 * (i % 4), defects=True, text=True)
         img, _ = synth.scene(payload, p, rng)
-        if recover(img[..., 0]) == payload:
+        if recover(img[..., 0])[0] == payload:
             ok += 1
     assert ok >= 5
 
@@ -146,4 +146,25 @@ def test_brute_region_order_preserves_recovery():
                           rotation_deg=270.0, skew_deg=6.0,
                           defects=True, text=True, edges=True)
     img, _ = synth.scene(payload, p, rng)
-    assert recover(img[..., 0]) == payload
+    assert recover(img[..., 0])[0] == payload
+
+
+def test_recover_returns_quad_enclosing_code():
+    import random
+    from dmtxslide import synth
+    from dmtxslide.register import recover
+    rng = random.Random(5)
+    payload = _square_symbol()[0]
+    p = synth.SceneParams(canvas=(900, 1100), cell=18, pos=(0.6, 0.45),
+                          rotation_deg=90.0, defects=True, text=True)
+    img, truth = synth.scene(payload, p, rng)
+    pl, quad = recover(img[..., 0])
+    assert pl == payload
+    assert quad is not None and quad.shape == (4, 2)
+    # quad center should sit near the true code center (within ~1 code-size)
+    cx, cy = quad[:, 0].mean(), quad[:, 1].mean()
+    assert abs(cx - truth["cx"]) < truth["size"] and abs(cy - truth["cy"]) < truth["size"]
+    # quad side should be roughly the code size (within 40%)
+    import numpy as np
+    side = np.linalg.norm(quad[0] - quad[1])
+    assert 0.6 * truth["size"] < side < 1.6 * truth["size"]

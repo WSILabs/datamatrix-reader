@@ -43,7 +43,7 @@ def main():
                 n += 1
                 if _hit(propose(g), truth):
                     loc += 1
-                if recover(g) == payload:
+                if recover(g)[0] == payload:
                     dec += 1
     print(f"synthetic scenes: {n}")
     print(f"localization recall: {loc}/{n} = {loc/n:.3f}")

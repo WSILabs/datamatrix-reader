@@ -45,6 +45,11 @@ corpus/wsi_labels/
 dmtxslide/corpus/wsi_labels_removed/
 corpus/wsi_labels_removed/
 
+# Raw YOLO training weights + the pretrained base (heavy, intermediate; regenerable via
+# tools/train_yolo.py). The SHIPPED detector is the exported ONNX under
+# src/dmtxslide/models/, which IS committed (small; works out-of-the-box on clone).
+*.pt
+
 # macOS
 .DS_Store
 

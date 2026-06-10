@@ -13,6 +13,11 @@ dependencies = ["numpy>=1.24", "opencv-python-headless>=4.8", "zxing-cpp>=2.0"]
 # GUI experiment tools (tools/paint_l.py manual finder-repair editor). Not needed
 # by the reader. Install: pip install -e ".[tools]"
 tools = ["pillow>=10"]
+# Learned YOLO detector — runtime INFERENCE only (lean; ONNX Runtime has a C API).
+# The Reader auto-falls back to the classical proposer if the model/onnxruntime is absent.
+yolo = ["onnxruntime>=1.16"]
+# Training/exporting the detector (dev-time only; heavy). Not a runtime dependency.
+yolo-train = ["ultralytics>=8.3"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

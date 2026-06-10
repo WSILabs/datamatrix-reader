@@ -217,44 +217,105 @@ def _brute_region(gray, cx, cy, te, ang):
                             except cv2.error:
                                 continue
                             if p is not None:
-                                return p
-    return None
-
-
-def decode_auto(gray):
-    """Detect (union of 2 detectors) + register + find-L + repaint-border + decode an
-    already-isolated, crop-scale grayscale image. Returns (payload, params) or
-    (None, None). ECC-validated → never returns a wrong payload.
-    Uses _brute_region (most-likely-first exhaustive search) per region."""
-    regions = [r for r in (detect_area(gray), detect_data_region(gray)) if r]
-    for cx, cy, te, ang in regions:
-        p = _brute_region(gray, cx, cy, te, ang)
-        if p is not None:
-            return p, {"region": (round(cx, 1), round(cy, 1), round(te, 1))}
+                                return p, (cx + dcx, cy + dcy, cell * M, ang + ddeg)
     return None, None
 
 
+def decode_auto(gray):
+    """Detect (union of 2 detectors) + register + repaint-border + decode an isolated,
+    crop-scale grayscale image. Returns (payload, reg) where reg=(cx, cy, side, deg) is
+    the code square in `gray`'s coords, or (None, None). ECC-validated."""
+    regions = [r for r in (detect_area(gray), detect_data_region(gray)) if r]
+    for cx, cy, te, ang in regions:
+        p, reg = _brute_region(gray, cx, cy, te, ang)
+        if p is not None:
+            return p, reg
+    return None, None
+
+
+def _square_quad(cx, cy, side, deg):
+    """The 4 corners of a square of `side` centred at (cx, cy) and rotated by `deg`
+    degrees, using the SAME rotation convention as sample_fast (img = center + R @ local
+    with R = [[cos, -sin], [sin, cos]]). Returns a (4, 2) float32 array (TL, TR, BR, BL)."""
+    t = np.radians(deg)
+    c, s = np.cos(t), np.sin(t)
+    h = side / 2.0
+    loc = np.array([[-h, -h], [h, -h], [h, h], [-h, h]], np.float32)
+    R = np.array([[c, -s], [s, c]], np.float32)
+    return (loc @ R.T + np.array([cx, cy], np.float32)).astype(np.float32)
+
+
+def _unmap_quad(quad, tf):
+    """Map a (4, 2) quad from upscaled-crop coords to original-image coords. tf=(x0,y0,f)."""
+    x0, y0, f = tf
+    return (np.asarray(quad, np.float32) / f + np.array([x0, y0], np.float32)).astype(np.float32)
+
+
 def _normalize(gray, cx, cy, size):
-    """Crop a window around a proposal and scale so the code is ~CANON px."""
+    """Crop a window around a proposal and scale so the code is ~CANON px. Returns
+    (upscaled_crop, tf) where tf=(x0, y0, f) maps a crop pixel (u, v) back to original
+    coords as (x0 + u/f, y0 + v/f). Returns (None, None) on an empty crop."""
     half = int(size * (0.5 + _MARGIN))
-    y0, y1 = max(0, int(cy) - half), min(gray.shape[0], int(cy) + half)
-    x0, x1 = max(0, int(cx) - half), min(gray.shape[1], int(cx) + half)
+    y0 = max(0, int(cy) - half)
+    y1 = min(gray.shape[0], int(cy) + half)
+    x0 = max(0, int(cx) - half)
+    x1 = min(gray.shape[1], int(cx) + half)
     crop = gray[y0:y1, x0:x1]
     if crop.size == 0:
-        return None
+        return None, None
     f = CANON / max(1.0, size)
-    return cv2.resize(crop, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC)
+    return cv2.resize(crop, None, fx=f, fy=f, interpolation=cv2.INTER_CUBIC), (x0, y0, f)
+
+
+_yolo = None    # lazy detector singleton: None=untried, False=unavailable, else YoloDetector
+
+
+def _detector():
+    """Return a YoloDetector if its ONNX model is present and onnxruntime imports, else
+    None (Reader then uses the classical proposer). Tried once, cached."""
+    global _yolo
+    if _yolo is None:
+        try:
+            from .detect import YoloDetector, DEFAULT_MODEL
+            _yolo = YoloDetector() if DEFAULT_MODEL.exists() else False
+        except Exception:
+            _yolo = False
+    return _yolo or None
+
+
+def _decode_region(gray, cx, cy, size):
+    """Normalize a candidate region, then the format gate: a readable DataMatrix is the
+    fast path; a readable QR/Aztec is NOT a DataMatrix so we skip the repair; otherwise
+    it's a (likely damaged) DataMatrix -> repair. Returns (payload, quad) in ORIGINAL
+    image coords, or (None, None)."""
+    up, tf = _normalize(gray, cx, cy, size)
+    if up is None:
+        return None, None
+    from .detect import format_gate
+    payload, fmt, pos = format_gate(up)
+    if fmt == "DataMatrix":
+        return payload, _unmap_quad(pos, tf)            # gate fast-path
+    if fmt is not None:
+        return None, None                               # QR/Aztec etc. — not a DataMatrix
+    pl, reg = decode_auto(up)                            # nothing read -> damaged DM -> repair
+    if pl is None:
+        return None, None
+    return pl, _unmap_quad(_square_quad(*reg), tf)
 
 
 def recover(gray):
-    """Reader fallback: propose candidate code regions anywhere on the label, normalize
-    each to canonical scale, and run the repair decoder. Returns payload bytes or None.
-    ECC-validated -> safe."""
+    """Reader fallback: detect candidate regions (YOLO when its model is installed, else
+    the classical proposer), gate each by format, repair damaged DataMatrix codes. Returns
+    (payload, quad) with quad the 4 corners in ORIGINAL image coords, or (None, None).
+    ECC-validated; classical proposer is the recall safety net when YOLO finds nothing."""
+    det = _detector()
+    if det is not None:
+        for cx, cy, size, _conf in det.detect(gray):
+            pl, quad = _decode_region(gray, cx, cy, size)
+            if pl is not None:
+                return pl, quad
     for cx, cy, size, _ in propose(gray):
-        up = _normalize(gray, cx, cy, size)
-        if up is None:
-            continue
-        payload, _ = decode_auto(up)
-        if payload is not None:
-            return payload
-    return None
+        pl, quad = _decode_region(gray, cx, cy, size)
+        if pl is not None:
+            return pl, quad
+    return None, None

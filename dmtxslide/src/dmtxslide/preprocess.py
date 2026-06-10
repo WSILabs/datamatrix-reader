@@ -66,3 +66,9 @@ STAGES = [("clahe", s_clahe)]
 STAGES += [(f"thick_u{f}_i{it}", lambda g, f=f, it=it: _thick(g, f, it))
            for f in (2, 4) for it in (1, 2, 3)]
 STAGES += [("sauv", s_sauv)]
+
+# Each stage uniformly upscales by this factor (no translation), so a code's position in
+# a stage's output maps to original coords by dividing by the factor.
+STAGE_SCALE = {"clahe": 2}
+STAGE_SCALE.update({f"thick_u{f}_i{it}": f for f in (2, 4) for it in (1, 2, 3)})
+STAGE_SCALE["sauv"] = 2

@@ -20,7 +20,7 @@ import cv2
 import numpy as np
 import zxingcpp
 
-from .preprocess import STAGES
+from .preprocess import STAGES, STAGE_SCALE
 from .register import recover
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
@@ -32,10 +32,20 @@ class ReadResult:
     # "raw" | "clahe" | "thick_u{f}_i{it}" | "sauv" | "autoreg" | None
     stage: str | None
     elapsed_ms: float
+    quad: np.ndarray | None = None      # (4,2) corners in ORIGINAL image coords, or None
 
     @property
     def ok(self) -> bool:
         return self.payload is not None
+
+    @property
+    def box(self) -> tuple[float, float, float, float] | None:
+        """Axis-aligned bounding box (x0, y0, x1, y1) in original-image coords, derived
+        from `quad` (None if undecoded). The quad carries orientation; box is the rect."""
+        if self.quad is None:
+            return None
+        xs, ys = self.quad[:, 0], self.quad[:, 1]
+        return (float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max()))
 
 
 def _gray(image: np.ndarray) -> np.ndarray:
@@ -47,24 +57,37 @@ def _zxing(gray: np.ndarray) -> bytes | None:
     return res[0].bytes if res else None
 
 
+def _zxing_pos(gray: np.ndarray):
+    """(payload_bytes, (4,2) corner array) or (None, None)."""
+    res = zxingcpp.read_barcodes(np.ascontiguousarray(gray), formats=_DM)
+    if not res:
+        return None, None
+    p = res[0].position
+    quad = np.array([[p.top_left.x, p.top_left.y], [p.top_right.x, p.top_right.y],
+                     [p.bottom_right.x, p.bottom_right.y], [p.bottom_left.x, p.bottom_left.y]],
+                    np.float32)
+    return res[0].bytes, quad
+
+
 class Reader:
     def read(self, image: np.ndarray, budget_ms: float = 250.0,
              fallback: bool = True) -> ReadResult:
         t0 = time.perf_counter()
         gray = _gray(image)
-        payload = _zxing(gray)
+        payload, quad = _zxing_pos(gray)
         stage = "raw" if payload is not None else None
         if payload is None:
             for name, transform in STAGES:
                 try:
-                    cand = _zxing(transform(gray))
+                    cand, qpos = _zxing_pos(transform(gray))
                 except cv2.error:
-                    continue           # degenerate image for this transform -> miss
+                    continue
                 if cand is not None:
                     payload, stage = cand, name
+                    quad = qpos / STAGE_SCALE[name] if qpos is not None else None  # stage upscales -> back to original
                     break
-        if payload is None and fallback:               # last resort: finder-reregistration
-            cand = recover(gray)
+        if payload is None and fallback:
+            cand, qquad = recover(gray)
             if cand is not None:
-                payload, stage = cand, "autoreg"
-        return ReadResult(payload, stage, (time.perf_counter() - t0) * 1000)
+                payload, stage, quad = cand, "autoreg", qquad
+        return ReadResult(payload, stage, (time.perf_counter() - t0) * 1000, quad=quad)

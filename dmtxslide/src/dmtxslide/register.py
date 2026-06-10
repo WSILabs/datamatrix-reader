@@ -114,7 +114,13 @@ def sample_fast(gray, cx, cy, cell, M, deg) -> np.ndarray:
     ], np.float32)
     cells = cv2.warpAffine(gray, Minv, (M, M),
                            flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP, borderValue=255)
-    thr = (np.percentile(cells, 10) + np.percentile(cells, 90)) / 2.0
+    # Dark via p10/p90 midpoint. np.partition picks both cutpoints in one partial sort —
+    # np.percentile's per-call machinery dominated the brute-force (~35% of decode_auto).
+    flat = cells.reshape(-1)
+    n = flat.size
+    lo, hi = n // 10, n * 9 // 10
+    part = np.partition(flat, (lo, hi))
+    thr = (float(part[lo]) + float(part[hi])) / 2.0
     return cells < thr
 
 
@@ -194,15 +200,18 @@ def detect_area(gray):
 
 
 def l_orientations(grid):
-    """Rank the 4 rotations by L-solidity. Each entry (oriented_grid, l, timing): l = mean
-    dark of the two arms that would be the finder L (left col + bottom row); timing = mean
-    dark of the other two. Best-first → the top puts the most-solid L at left+bottom."""
-    out = []
-    for k in range(4):
-        g = np.rot90(grid, k)
-        out.append((g, (g[:, 0].mean() + g[-1, :].mean()) / 2.0,
-                    (g[0, :].mean() + g[:, -1].mean()) / 2.0))
-    return sorted(out, key=lambda e: -e[1])
+    """Yield the 4 rotations best-L-first as (oriented_grid, l, timing): l = mean dark of
+    the two arms that would be the finder L (left col + bottom row of the rotated grid);
+    timing = mean dark of the other two. The 4 scores are derived from the grid's 4 border
+    means (no per-rotation rotation needed to RANK), and each rotated grid is materialised
+    lazily as it's yielded — so the caller's early break (l < 0.6) skips the unused rot90s.
+    Equivalent to the eager rot90-all-4 version (verified)."""
+    T, B = grid[0, :].mean(), grid[-1, :].mean()
+    L, Rt = grid[:, 0].mean(), grid[:, -1].mean()
+    sc = [((L + B) / 2.0, (T + Rt) / 2.0), ((T + L) / 2.0, (Rt + B) / 2.0),
+          ((Rt + T) / 2.0, (B + L) / 2.0), ((B + Rt) / 2.0, (L + T) / 2.0)]
+    for k in sorted(range(4), key=lambda k: -sc[k][0]):
+        yield np.rot90(grid, k), sc[k][0], sc[k][1]
 
 
 def _outward(values, center):

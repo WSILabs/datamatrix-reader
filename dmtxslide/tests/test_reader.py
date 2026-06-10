@@ -70,6 +70,27 @@ def test_stage_transform_error_is_treated_as_miss(monkeypatch):
     assert r.payload is None and r.stage is None
 
 
+def test_l_orientations_matches_eager_rotation():
+    # l_orientations derives the 4 L-scores from border means and rotates lazily; it must
+    # stay identical to the straightforward eager rot90-all-4 reference (this guards the
+    # hand-derived border->rotation mapping that the registration search depends on).
+    def eager(grid):
+        out = [(np.rot90(grid, k),
+                (np.rot90(grid, k)[:, 0].mean() + np.rot90(grid, k)[-1, :].mean()) / 2.0,
+                (np.rot90(grid, k)[0, :].mean() + np.rot90(grid, k)[:, -1].mean()) / 2.0)
+               for k in range(4)]
+        return sorted(out, key=lambda e: -e[1])
+    rng = np.random.default_rng(7)
+    for _ in range(200):
+        m = int(rng.integers(8, 26))
+        grid = rng.random((m, m)) < 0.5
+        got = list(REG.l_orientations(grid))
+        exp = eager(grid)
+        assert len(got) == 4
+        for (gg, gl, gt), (eg, el, et) in zip(got, exp):
+            assert np.isclose(gl, el) and np.isclose(gt, et) and np.array_equal(gg, eg)
+
+
 def test_read_all_finds_multiple_datamatrix_and_qr_hint():
     import numpy as np, cv2, zxingcpp
     from dmtxslide.reader import Reader

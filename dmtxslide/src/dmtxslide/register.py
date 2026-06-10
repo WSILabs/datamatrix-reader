@@ -319,3 +319,39 @@ def recover(gray):
         if pl is not None:
             return pl, quad
     return None, None
+
+
+def _quad_center(quad):
+    return float(np.asarray(quad)[:, 0].mean()), float(np.asarray(quad)[:, 1].mean())
+
+
+def decode_all(gray):
+    """Find EVERY DataMatrix region the detector surfaces, plus non-DM 2D hints. Returns
+    (dm, other): lists of (payload, quad, format, stage); quads in ORIGINAL image coords.
+    Each detected region: format-gate -> a readable DataMatrix (gate fast-path) or a
+    readable QR/Aztec (hint, NOT repaired) or, if nothing reads, repair a damaged
+    DataMatrix. Regions whose centers were already taken are skipped (dedup)."""
+    from .detect import format_gate
+    det = _detector()
+    cands = (det.detect(gray) if det is not None
+             else [(cx, cy, s, 0.0) for cx, cy, s, _ in propose(gray)])
+    dm, other, seen = [], [], []
+    for cx, cy, size, *_ in cands:
+        if any(abs(cx - sx) < 0.5 * size and abs(cy - sy) < 0.5 * size for sx, sy in seen):
+            continue
+        up, tf = _normalize(gray, cx, cy, size)
+        if up is None:
+            continue
+        payload, fmt, pos = format_gate(up)
+        if fmt == "DataMatrix":
+            dm.append((payload, _unmap_quad(pos, tf), "DataMatrix", "gate"))
+            seen.append((cx, cy))
+        elif fmt is not None:
+            other.append((payload, _unmap_quad(pos, tf), fmt, "detector"))
+        else:
+            pl, reg = decode_auto(up)               # nothing read -> damaged DM -> repair
+            if pl is not None:
+                dm.append((pl, _unmap_quad(_square_quad(*reg), tf), "DataMatrix", "autoreg"))
+                seen.append((cx, cy))
+    # faint codes the detector misses are caught by read_all's full-frame cascade (Pass 3)
+    return dm, other

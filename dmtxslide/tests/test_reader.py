@@ -47,3 +47,30 @@ def test_stage_transform_error_is_treated_as_miss(monkeypatch):
     monkeypatch.setattr(R, "_zxing_pos", lambda g: (None, None))  # everything misses
     r = Reader().read(np.full((60, 60), 255, np.uint8))
     assert r.payload is None and r.stage is None
+
+
+def test_read_all_finds_multiple_datamatrix_and_qr_hint():
+    import numpy as np, cv2, zxingcpp
+    from dmtxslide.reader import Reader
+    _DM = zxingcpp.BarcodeFormat.DataMatrix
+
+    def tile(payload, fmt, scale=12):
+        a = np.asarray(zxingcpp.create_barcode(payload, fmt).to_image())
+        return cv2.resize(a, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+
+    t1 = tile(b"1-S-25-00001 A1", _DM)
+    t2 = tile(b"1-S-25-00002 B2", _DM)
+    qr = tile("https://lis.example/9", zxingcpp.BarcodeFormat.QRCode, 10)
+    # canvas tall enough to fit the QR at row 420 (420 + 330 = 750 < 800)
+    canvas = np.full((800, 1100), 245, np.uint8)
+    canvas[120:120 + t1.shape[0], 120:120 + t1.shape[1]] = t1
+    canvas[120:120 + t2.shape[0], 700:700 + t2.shape[1]] = t2
+    canvas[420:420 + qr.shape[0], 420:420 + qr.shape[1]] = qr
+
+    res = Reader().read_all(canvas)
+    payloads = set(res.payloads)
+    assert b"1-S-25-00001 A1" in payloads and b"1-S-25-00002 B2" in payloads
+    assert all(c.format == "DataMatrix" and c.quad.shape == (4, 2) for c in res.datamatrix)
+    # the QR is reported as a non-DM hint, NOT among the DataMatrix
+    assert any(c.format == "QRCode" for c in res.other_2d)
+    assert all(c.format != "QRCode" for c in res.datamatrix)

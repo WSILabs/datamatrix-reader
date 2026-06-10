@@ -24,6 +24,8 @@ from .preprocess import STAGES, STAGE_SCALE
 from .register import recover
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
+_2D = (zxingcpp.BarcodeFormat.DataMatrix, zxingcpp.BarcodeFormat.QRCode,
+       zxingcpp.BarcodeFormat.Aztec)
 
 
 @dataclass
@@ -57,19 +59,98 @@ def _zxing(gray: np.ndarray) -> bytes | None:
     return res[0].bytes if res else None
 
 
+def _pos_quad(p) -> np.ndarray:
+    return np.array([[p.top_left.x, p.top_left.y], [p.top_right.x, p.top_right.y],
+                     [p.bottom_right.x, p.bottom_right.y], [p.bottom_left.x, p.bottom_left.y]],
+                    np.float32)
+
+
 def _zxing_pos(gray: np.ndarray):
     """(payload_bytes, (4,2) corner array) or (None, None)."""
     res = zxingcpp.read_barcodes(np.ascontiguousarray(gray), formats=_DM)
     if not res:
         return None, None
-    p = res[0].position
-    quad = np.array([[p.top_left.x, p.top_left.y], [p.top_right.x, p.top_right.y],
-                     [p.bottom_right.x, p.bottom_right.y], [p.bottom_left.x, p.bottom_left.y]],
-                    np.float32)
-    return res[0].bytes, quad
+    return res[0].bytes, _pos_quad(res[0].position)
+
+
+@dataclass
+class Code:
+    """One found 2D code. `payload` is the decode (None only for an undecoded hint);
+    `quad` (4,2) and `box` are ORIGINAL-image coords; `format` is 'DataMatrix'/'QRCode'/
+    'Aztec'; `stage` is how it was found ('raw'|'gate'|'autoreg'|'detector')."""
+    payload: bytes | None
+    quad: np.ndarray
+    format: str
+    stage: str
+
+    @property
+    def box(self) -> tuple[float, float, float, float]:
+        xs, ys = self.quad[:, 0], self.quad[:, 1]
+        return (float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max()))
+
+
+@dataclass
+class ReadAllResult:
+    datamatrix: list[Code]      # every DataMatrix found
+    other_2d: list[Code]        # non-DM 2D codes (QR/Aztec) as routable hints
+    elapsed_ms: float
+
+    @property
+    def payloads(self) -> list[bytes]:
+        return [c.payload for c in self.datamatrix]
 
 
 class Reader:
+    def read_all(self, image: np.ndarray, fallback: bool = True) -> ReadAllResult:
+        """All DataMatrix codes on the image (each with quad+box, original coords), plus
+        non-DM 2D codes (QR/Aztec) as tagged hints. Raw multi-decode first; then the
+        detector (YOLO or classical) surfaces additional/damaged codes via gate+repair."""
+        from .register import decode_all, _quad_center
+        t0 = time.perf_counter()
+        gray = _gray(image)
+        dm: list[Code] = []
+        seen: list[tuple[float, float]] = []
+        other: list[Code] = []
+        # Pass 1: every directly-decodable 2D code on the full frame (DM + QR + Aztec).
+        for r in zxingcpp.read_barcodes(np.ascontiguousarray(gray), formats=_2D):
+            q = _pos_quad(r.position)
+            fmt = r.format.name
+            if fmt == "DataMatrix":
+                dm.append(Code(r.bytes, q, "DataMatrix", "raw"))
+                seen.append(_quad_center(q))
+            else:
+                other.append(Code(r.bytes, q, fmt, "raw"))
+        # Pass 2: detector regions -> gate/repair for codes raw missed (dedup vs Pass 1).
+        if fallback:
+            ddm, doth = decode_all(gray)
+            for pl, q, fmt, st in ddm:
+                cx, cy = _quad_center(q)
+                side = float(np.linalg.norm(q[0] - q[1]))
+                if any(abs(cx - sx) < 0.6 * side and abs(cy - sy) < 0.6 * side for sx, sy in seen):
+                    continue
+                dm.append(Code(pl, q, fmt, st))
+                seen.append((cx, cy))
+            for pl, q, fmt, st in doth:
+                other.append(Code(pl, q, fmt, st))
+            # Pass 3: full-frame preprocessing cascade — same as read()'s ladder — for any
+            # DataMatrix that the raw scan and the detector both missed (faint ink, no crop).
+            for name, transform in STAGES:
+                try:
+                    transformed = transform(gray)
+                except cv2.error:
+                    continue
+                scale = STAGE_SCALE[name]
+                for r in zxingcpp.read_barcodes(np.ascontiguousarray(transformed), formats=_DM):
+                    q = _pos_quad(r.position) / scale
+                    cx, cy = _quad_center(q)
+                    side = float(np.linalg.norm(q[0] - q[1]))
+                    if any(abs(cx - sx) < 0.6 * side and abs(cy - sy) < 0.6 * side
+                           for sx, sy in seen):
+                        continue
+                    dm.append(Code(r.bytes, q, "DataMatrix", name))
+                    seen.append((cx, cy))
+        return ReadAllResult(dm, other, (time.perf_counter() - t0) * 1000)
+
     def read(self, image: np.ndarray, budget_ms: float = 250.0,
              fallback: bool = True) -> ReadResult:
         t0 = time.perf_counter()

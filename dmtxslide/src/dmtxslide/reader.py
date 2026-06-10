@@ -103,52 +103,52 @@ class ReadAllResult:
 class Reader:
     def read_all(self, image: np.ndarray, fallback: bool = True) -> ReadAllResult:
         """All DataMatrix codes on the image (each with quad+box, original coords), plus
-        non-DM 2D codes (QR/Aztec) as tagged hints. Raw multi-decode first; then the
-        detector (YOLO or classical) surfaces additional/damaged codes via gate+repair."""
+        non-DM 2D codes (QR/Aztec) as tagged hints. Pass 1 raw multi-decode; Pass 2 the
+        detector (YOLO/classical) surfaces additional/damaged codes via gate+repair; Pass 3
+        the full-frame preprocessing cascade — the detection-free safety net for faint codes
+        no detector could localize — runs ONLY when a detected region went undecoded or
+        nothing was found, so the clean common case skips it entirely."""
         from .register import decode_all, _quad_center
         t0 = time.perf_counter()
         gray = _gray(image)
         dm: list[Code] = []
         seen: list[tuple[float, float]] = []
         other: list[Code] = []
+
+        def _add(payload, q, fmt, stage):
+            cx, cy = _quad_center(q)
+            side = float(np.linalg.norm(q[0] - q[1]))
+            if any(abs(cx - sx) < 0.6 * side and abs(cy - sy) < 0.6 * side for sx, sy in seen):
+                return
+            dm.append(Code(payload, q, fmt, stage))
+            seen.append((cx, cy))
+
         # Pass 1: every directly-decodable 2D code on the full frame (DM + QR + Aztec).
         for r in zxingcpp.read_barcodes(np.ascontiguousarray(gray), formats=_2D):
             q = _pos_quad(r.position)
-            fmt = r.format.name
-            if fmt == "DataMatrix":
-                dm.append(Code(r.bytes, q, "DataMatrix", "raw"))
-                seen.append(_quad_center(q))
+            if r.format.name == "DataMatrix":
+                dm.append(Code(r.bytes, q, "DataMatrix", "raw")); seen.append(_quad_center(q))
             else:
-                other.append(Code(r.bytes, q, fmt, "raw"))
-        # Pass 2: detector regions -> gate/repair for codes raw missed (dedup vs Pass 1).
+                other.append(Code(r.bytes, q, r.format.name, "raw"))
         if fallback:
-            ddm, doth = decode_all(gray)
+            # Pass 2: detector regions -> gate/repair for codes raw missed (skip regions
+            # Pass 1 already decoded, so we don't re-decode or waste a repair on them).
+            ddm, doth, undecoded = decode_all(gray, skip=seen)
             for pl, q, fmt, st in ddm:
-                cx, cy = _quad_center(q)
-                side = float(np.linalg.norm(q[0] - q[1]))
-                if any(abs(cx - sx) < 0.6 * side and abs(cy - sy) < 0.6 * side for sx, sy in seen):
-                    continue
-                dm.append(Code(pl, q, fmt, st))
-                seen.append((cx, cy))
+                _add(pl, q, fmt, st)
             for pl, q, fmt, st in doth:
                 other.append(Code(pl, q, fmt, st))
-            # Pass 3: full-frame preprocessing cascade — same as read()'s ladder — for any
-            # DataMatrix that the raw scan and the detector both missed (faint ink, no crop).
-            for name, transform in STAGES:
-                try:
-                    transformed = transform(gray)
-                except cv2.error:
-                    continue
-                scale = STAGE_SCALE[name]
-                for r in zxingcpp.read_barcodes(np.ascontiguousarray(transformed), formats=_DM):
-                    q = _pos_quad(r.position) / scale
-                    cx, cy = _quad_center(q)
-                    side = float(np.linalg.norm(q[0] - q[1]))
-                    if any(abs(cx - sx) < 0.6 * side and abs(cy - sy) < 0.6 * side
-                           for sx, sy in seen):
+            # Pass 3 (conditional): a detected region didn't decode (maybe a faint code), or
+            # nothing was found at all (a code no detector could localize) -> full-frame
+            # cascade. Skipped when every detected code decoded -> the common case stays fast.
+            if undecoded > 0 or not dm:
+                for name, transform in STAGES:
+                    try:
+                        transformed = transform(gray)
+                    except cv2.error:
                         continue
-                    dm.append(Code(r.bytes, q, "DataMatrix", name))
-                    seen.append((cx, cy))
+                    for r in zxingcpp.read_barcodes(np.ascontiguousarray(transformed), formats=_DM):
+                        _add(r.bytes, _pos_quad(r.position) / STAGE_SCALE[name], "DataMatrix", name)
         return ReadAllResult(dm, other, (time.perf_counter() - t0) * 1000)
 
     def read(self, image: np.ndarray, budget_ms: float = 250.0,

@@ -226,10 +226,13 @@ def decode_auto(gray):
     crop-scale grayscale image. Returns (payload, reg) where reg=(cx, cy, side, deg) is
     the code square in `gray`'s coords, or (None, None). ECC-validated.
 
-    Texture FIRST (the reliable, precise region — ablation: 7/7 alone), gradient only as a
-    fallback: gradient occasionally over-segments (a bad extent) and burns a full failed
-    search, so trying the better approximation first is much faster."""
-    regions = [r for r in (detect_data_region(gray), detect_area(gray)) if r]
+    Texture-only: `gray` is an already-isolated crop (the detector / YOLO box did the
+    localization, including any slide-edge rejection), so the gradient detector's edge
+    rejection is redundant here, and it occasionally over-segments and burns a full failed
+    search (~4s) on faint codes that aren't repairable anyway. Texture is the reliable,
+    precise region (ablation: 7/7 alone). (detect_area stays available for callers that
+    work on a non-isolated frame.)"""
+    regions = [r for r in (detect_data_region(gray),) if r]
     for cx, cy, te, ang in regions:
         p, reg = _brute_region(gray, cx, cy, te, ang)
         if p is not None:
@@ -329,17 +332,21 @@ def _quad_center(quad):
     return float(np.asarray(quad)[:, 0].mean()), float(np.asarray(quad)[:, 1].mean())
 
 
-def decode_all(gray):
+def decode_all(gray, skip=()):
     """Find EVERY DataMatrix region the detector surfaces, plus non-DM 2D hints. Returns
-    (dm, other): lists of (payload, quad, format, stage); quads in ORIGINAL image coords.
-    Each detected region: format-gate -> a readable DataMatrix (gate fast-path) or a
-    readable QR/Aztec (hint, NOT repaired) or, if nothing reads, repair a damaged
-    DataMatrix. Regions whose centers were already taken are skipped (dedup)."""
+    (dm, other, undecoded): dm/other are lists of (payload, quad, format, stage) (quads in
+    ORIGINAL image coords); undecoded is the count of detected regions that yielded no code
+    (a possible faint code -> the caller may want the full-frame cascade). Each region:
+    format-gate -> a readable DataMatrix (gate fast-path) or a readable QR/Aztec (hint, NOT
+    repaired) or, if nothing reads, repair a damaged DataMatrix. `skip` is a list of (cx,cy)
+    centers already found (e.g. by a prior raw pass) — regions near them are skipped, so we
+    don't re-decode or waste a repair on a code/decoy the caller already has."""
     from .detect import format_gate
     det = _detector()
     cands = (det.detect(gray) if det is not None
              else [(cx, cy, s, 0.0) for cx, cy, s, _ in propose(gray)])
-    dm, other, seen = [], [], []
+    dm, other, undecoded = [], [], 0
+    seen = list(skip)
     for cx, cy, size, *_ in cands:
         if any(abs(cx - sx) < 0.5 * size and abs(cy - sy) < 0.5 * size for sx, sy in seen):
             continue
@@ -357,5 +364,6 @@ def decode_all(gray):
             if pl is not None:
                 dm.append((pl, _unmap_quad(_square_quad(*reg), tf), "DataMatrix", "autoreg"))
                 seen.append((cx, cy))
-    # faint codes the detector misses are caught by read_all's full-frame cascade (Pass 3)
-    return dm, other
+            else:
+                undecoded += 1          # a detected region we couldn't decode -> maybe faint
+    return dm, other, undecoded

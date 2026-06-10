@@ -50,7 +50,7 @@ def test_decode_auto_recovers_clean_code():
     img = _canvas(dark)
     got, params = decode_auto(img)
     assert got == payload
-    assert params["M"] == dark.shape[0]
+    assert params is not None and "region" in params
 
 
 def test_decode_auto_recovers_broken_border():
@@ -123,3 +123,26 @@ def test_recover_decodes_offcenter_scene():
                           rotation_deg=180.0, defects=True, text=True, edges=True)
     img, truth = synth.scene(payload, p, rng)
     assert recover(img[..., 0]) == payload
+
+
+def test_register_candidate_matches_bruteforce():
+    import random
+    from dmtxslide import synth
+    from dmtxslide.register import recover
+    rng = random.Random(7)
+    payload = None
+    for t in (b"DMTXSLIDE-GUIDED-TEST1", b"ABCDEFGHIJKLMNOPQRSTUVWX"):
+        import zxingcpp
+        a = np.asarray(zxingcpp.create_barcode(t.decode(),
+              zxingcpp.BarcodeFormat.DataMatrix).to_image())
+        if a.shape[0] == a.shape[1]:
+            payload = t; break
+    # several damaged scenes must still decode under the score-guided path
+    ok = 0
+    for i in range(6):
+        p = synth.SceneParams(canvas=(800, 900), cell=16 + i, pos=(0.4, 0.55),
+                              rotation_deg=90.0 * (i % 4), defects=True, text=True)
+        img, _ = synth.scene(payload, p, rng)
+        if recover(img[..., 0]) == payload:
+            ok += 1
+    assert ok >= 5

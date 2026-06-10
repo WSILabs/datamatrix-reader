@@ -204,33 +204,67 @@ def l_orientations(grid):
     return sorted(out, key=lambda e: -e[1])
 
 
+def _brute_region(gray, cx, cy, te, ang):
+    """The exhaustive search (today's decode_auto body) for ONE region — the backstop."""
+    for M in SIZES:
+        for cell in np.arange(te / (M + 3), te / (M - 1), 0.5):
+            for ddeg in np.arange(-3, 3.01, 1.0):
+                for dcx in np.arange(-1.5, 1.51, 0.375) * cell:
+                    for dcy in np.arange(-1.5, 1.51, 0.375) * cell:
+                        grid = sample_fast(gray, cx + dcx, cy + dcy, cell, M, ang + ddeg)
+                        for g, lsc, _ in l_orientations(grid):
+                            if lsc < 0.6:
+                                break
+                            try:
+                                p = _zxing(render_symbol(g, M))
+                            except cv2.error:
+                                continue
+                            if p is not None:
+                                return p
+    return None
+
+
+def register_candidate(gray, cx, cy, te, ang, top_k=4):
+    """Score-guided registration for ONE region, with a brute-force backstop.
+    Coarse-to-fine maximize score_registration over (center, cell, angle) per M; decode
+    the top_k highest-scoring hypotheses; if none decode, fall back to _brute_region."""
+    scored = []
+    for M in SIZES:
+        cell0 = te / M
+        best = (cx, cy, cell0, ang)
+        for step_c, step_cell, step_a in ((0.5 * cell0, 1.0, 1.5), (0.18 * cell0, 0.5, 0.7)):
+            bx, by, bc, ba = best
+            cand = [(bx + dx, by + dy, bc + dc, ba + da)
+                    for dx in (-step_c, 0, step_c) for dy in (-step_c, 0, step_c)
+                    for dc in (-step_cell, 0, step_cell) for da in (-step_a, 0, step_a)]
+            best = max(cand, key=lambda v: score_registration(gray, v[0], v[1], v[2], M, v[3]))
+        s = score_registration(gray, best[0], best[1], best[2], M, best[3])
+        scored.append((s, M, best))
+    scored.sort(key=lambda v: -v[0])
+    for _, M, (rx, ry, rc, ra) in scored[:top_k]:
+        grid = sample_fast(gray, rx, ry, rc, M, ra)
+        for g, lsc, _ in l_orientations(grid):
+            if lsc < 0.6:
+                break
+            try:
+                p = _zxing(render_symbol(g, M))
+            except cv2.error:
+                continue
+            if p is not None:
+                return p
+    return _brute_region(gray, cx, cy, te, ang)        # backstop — recall can't regress
+
+
 def decode_auto(gray):
     """Detect (union of 2 detectors) + register + find-L + repaint-border + decode an
     already-isolated, crop-scale grayscale image. Returns (payload, params) or
-    (None, None). ECC-validated → never returns a wrong payload."""
-    regions = [r for r in (detect_area(gray),
-                           detect_data_region(gray)) if r]
+    (None, None). ECC-validated → never returns a wrong payload.
+    Uses register_candidate (score-guided, fast) per region, with a brute-force backstop."""
+    regions = [r for r in (detect_area(gray), detect_data_region(gray)) if r]
     for cx, cy, te, ang in regions:
-        for M in SIZES:
-            # extent may under-shoot (finder excluded) or over-shoot (merged); bracket wide
-            for cell in np.arange(te / (M + 3), te / (M - 1), 0.5):
-                for ddeg in np.arange(-3, 3.01, 1.0):
-                    for dcx in np.arange(-1.5, 1.51, 0.375) * cell:
-                        for dcy in np.arange(-1.5, 1.51, 0.375) * cell:
-                            grid = sample_fast(gray, cx + dcx, cy + dcy, cell, M, ang + ddeg)
-                            for g, lsc, _ in l_orientations(grid):
-                                if lsc < 0.6:                  # skip non-L grids (sorted desc)
-                                    break
-                                try:
-                                    p = _zxing(render_symbol(g, M))
-                                except cv2.error:
-                                    continue
-                                if p is not None:
-                                    return p, dict(M=M, cell=round(float(cell), 2),
-                                                   deg=round(float(ang + ddeg), 2),
-                                                   cx=round(float(cx + dcx), 1),
-                                                   cy=round(float(cy + dcy), 1),
-                                                   Lsolid=round(float(lsc), 2))
+        p = register_candidate(gray, cx, cy, te, ang)
+        if p is not None:
+            return p, {"region": (round(cx, 1), round(cy, 1), round(te, 1))}
     return None, None
 
 

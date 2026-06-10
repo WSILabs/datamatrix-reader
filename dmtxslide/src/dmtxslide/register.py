@@ -224,8 +224,12 @@ def _brute_region(gray, cx, cy, te, ang):
 def decode_auto(gray):
     """Detect (union of 2 detectors) + register + repaint-border + decode an isolated,
     crop-scale grayscale image. Returns (payload, reg) where reg=(cx, cy, side, deg) is
-    the code square in `gray`'s coords, or (None, None). ECC-validated."""
-    regions = [r for r in (detect_area(gray), detect_data_region(gray)) if r]
+    the code square in `gray`'s coords, or (None, None). ECC-validated.
+
+    Texture FIRST (the reliable, precise region — ablation: 7/7 alone), gradient only as a
+    fallback: gradient occasionally over-segments (a bad extent) and burns a full failed
+    search, so trying the better approximation first is much faster."""
+    regions = [r for r in (detect_data_region(gray), detect_area(gray)) if r]
     for cx, cy, te, ang in regions:
         p, reg = _brute_region(gray, cx, cy, te, ang)
         if p is not None:

@@ -173,6 +173,25 @@ def detect_area(gray):
     return None if best is None else best[1]
 
 
+# weights tuned in Task 8 against WSI + synthetic; start here.
+_W_L, _W_QUIET, _W_BIMODAL = 1.5, 1.0, 0.5
+
+
+def score_registration(gray, cx, cy, cell, M, deg):
+    """Cheap registration quality score in [~0, 3], NO zxing. Peaks at the true grid:
+      L_solidity   - best of 4 orientations' (left col + bottom row) dark fraction
+      quiet_white  - 1-module ring just OUTSIDE the MxM should be light
+      bimodality   - interior data ~50% dark (not a uniform patch)."""
+    grid = sample_fast(gray, cx, cy, cell, M, deg)
+    l = max((np.rot90(grid, k)[:, 0].mean() + np.rot90(grid, k)[-1, :].mean()) / 2.0
+            for k in range(4))
+    outer = sample_fast(gray, cx, cy, cell, M + 2, deg)      # ring = the M+2 border
+    ring = np.concatenate([outer[0, :], outer[-1, :], outer[:, 0], outer[:, -1]])
+    quiet_white = 1.0 - float(ring.mean())
+    bimodal = 1.0 - abs(float(grid.mean()) - 0.5) * 2.0
+    return _W_L * l + _W_QUIET * quiet_white + _W_BIMODAL * bimodal
+
+
 def l_orientations(grid):
     """Rank the 4 rotations by L-solidity. Each entry (oriented_grid, l, timing): l = mean
     dark of the two arms that would be the finder L (left col + bottom row); timing = mean

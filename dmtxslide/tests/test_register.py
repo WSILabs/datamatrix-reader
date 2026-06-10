@@ -98,6 +98,20 @@ def test_decode_auto_uses_two_detectors():
     assert "detect_area" in src and "detect_data_region" in src
 
 
+def test_score_peaks_at_true_registration():
+    from dmtxslide.register import score_registration
+    payload, dark = _square_symbol()          # existing helper -> (payload, MxM bool)
+    M = dark.shape[0]
+    img = _canvas(dark, cell=20, quiet=4)      # existing helper
+    H, W = img.shape
+    cx, cy = W / 2.0, H / 2.0
+    true = score_registration(img, cx, cy, 20.0, M, 0.0)
+    # mis-registered by half a module / wrong pitch / off-center must score lower
+    assert true > score_registration(img, cx + 10, cy, 20.0, M, 0.0)
+    assert true > score_registration(img, cx, cy, 26.0, M, 0.0)
+    assert true > score_registration(img, cx, cy, 20.0, M, 8.0)
+
+
 def test_recover_decodes_offcenter_scene():
     import random
     from dmtxslide import synth

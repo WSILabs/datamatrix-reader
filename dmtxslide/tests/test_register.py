@@ -9,7 +9,8 @@ import numpy as np
 import pytest
 import zxingcpp
 
-from dmtxslide.register import decode_auto, detect_area, border_mask, render_symbol
+from dmtxslide.register import (decode_auto, detect_area, border_mask, render_symbol,
+                                _square_from_coverage)
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 
@@ -81,6 +82,24 @@ def test_detect_area_rejects_straight_edge():
     assert cx > 30                                   # centered on the code, not the bar
     got, _ = decode_auto(img)
     assert got == payload
+
+
+def test_square_from_coverage_clips_narrow_protrusion():
+    """The coverage-clip square fit ignores a narrow protrusion (the ink-drip case) that a
+    naive minAreaRect would let drag the center/extent. On a clean square it's a no-op."""
+    sq = np.zeros((320, 320), np.uint8)
+    sq[80:200, 90:210] = 1                           # 120x120 square, center (150,140)
+    c = cv2.findContours(sq, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0][0]
+    cx, cy, side, _ = _square_from_coverage(sq.shape, c, 0.0)
+    assert abs(cx - 150) < 4 and abs(cy - 140) < 4 and abs(side - 120) < 8   # clean: no-op
+
+    drip = sq.copy()
+    drip[200:280, 140:162] = 1                        # thin tail below (a drip)
+    cd = cv2.findContours(drip, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0][0]
+    dcx, dcy, dside, _ = _square_from_coverage(drip.shape, cd, 0.0)
+    (_, rcy), _, _ = cv2.minAreaRect(cd)             # rect center dragged DOWN by the tail
+    assert abs(dcy - 140) < 12 and abs(dside - 120) < 16   # clip stays on the square
+    assert rcy > dcy + 8                             # ...whereas the rect drifted down
 
 
 def test_decode_auto_returns_none_on_blank():

@@ -158,8 +158,44 @@ def detect_dark_region(gray):
     return None if best is None else best[1]
 
 
+def _square_from_coverage(shape, contour, ang):
+    """Best-fit square to a region contour, robust to NARROW protrusions (e.g. ink dripping
+    below the finder L). Axis-align the filled contour, then on each axis keep only the span
+    whose coverage exceeds half the plateau: the drip's partial-width rows/cols fall below and
+    are clipped, the full-width data rows/cols are kept. Returns (cx, cy, side, ang) in the
+    original frame, or None if the span is degenerate. A clean square clips to itself (no-op),
+    so this only moves the start where an asymmetric protrusion was dragging center/extent."""
+    h, w = shape
+    m = np.zeros((h, w), np.uint8)
+    cv2.drawContours(m, [contour], -1, 1, -1)
+    mr = cv2.warpAffine(m, cv2.getRotationMatrix2D((w / 2.0, h / 2.0), ang, 1.0), (w, h))
+
+    def span(cov):
+        cov = cov.astype(np.float32)
+        strong = cov[cov > 0.5 * cov.max()]
+        if strong.size == 0:
+            return None
+        idx = np.where(cov > 0.5 * float(np.median(strong)))[0]
+        return (int(idx[0]), int(idx[-1])) if idx.size else None
+
+    xs, ys = span(mr.sum(0)), span(mr.sum(1))
+    if xs is None or ys is None:
+        return None
+    cxr, cyr = (xs[0] + xs[1]) / 2.0, (ys[0] + ys[1]) / 2.0
+    side = ((xs[1] - xs[0]) + (ys[1] - ys[0])) / 2.0
+    p = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), -ang, 1.0) @ np.array([cxr, cyr, 1.0])
+    return float(p[0]), float(p[1]), float(side), ang
+
+
 def detect_data_region(gray):
-    """High-texture DATA region. L-defect tolerant — independent of the printed finder."""
+    """High-texture DATA region. L-defect tolerant — independent of the printed finder.
+    Returns (cx, cy, te, ang, ocx, ocy, oside): the texture region's minAreaRect (cx, cy, te)
+    is the SEARCH-RANGE anchor; (ocx, ocy, oside) is a coverage-clip best-fit SQUARE used only
+    to ORDER the search most-likely-first. The clip is robust to a narrow protrusion — e.g. ink
+    dripping below the finder L — that drags the rect's center down and inflates its extent. The
+    ranges stay anchored to the rect so coverage (hence recall) is unchanged; only the iteration
+    order benefits from the cleaner estimate. Falls back to the rect for ordering too if the
+    clip is degenerate."""
     std = _texture(gray, (13, 13)).astype(np.uint8)
     tex = cv2.threshold(std, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
     tex = cv2.morphologyEx(tex, cv2.MORPH_OPEN, _kernel(7))     # drop thin text
@@ -172,8 +208,13 @@ def detect_data_region(gray):
             continue
         area = w * h
         if best is None or area > best[0]:
-            best = (area, (cx, cy, (w + h) / 2.0, ang))
-    return None if best is None else best[1]
+            best = (area, c, (cx, cy, (w + h) / 2.0, ang))
+    if best is None:
+        return None
+    rcx, rcy, rte, ang = best[2]
+    sq = _square_from_coverage(gray.shape, best[1], ang)
+    ocx, ocy, oside = (sq[0], sq[1], sq[2]) if sq is not None else (rcx, rcy, rte)
+    return rcx, rcy, rte, ang, ocx, ocy, oside
 
 
 def detect_area(gray):
@@ -220,18 +261,24 @@ def _outward(values, center):
     return sorted(values, key=lambda v: abs(v - center))
 
 
-def _brute_region(gray, cx, cy, te, ang):
-    """Exhaustive registration search for ONE region, ordered most-likely-FIRST: the
-    detection's own pitch (te/M), angle (0 offset) and center (0 offset) are tried first,
-    expanding outward. Identical coverage to a full sweep -> recall unchanged; only the
-    iteration order (hence early-exit speed) differs. ECC-validated -> never mis-reads."""
+def _brute_region(gray, cx, cy, te, ang, ocx=None, ocy=None, oside=None):
+    """Exhaustive registration search for ONE region, ordered most-likely-FIRST. The search
+    RANGES are anchored to the rect (cx, cy, te) — identical coverage to a full sweep, so recall
+    is unchanged. The ORDER expands outward from the coverage-clip estimate (ocx, ocy, oside)
+    when given (its pitch oside/M and center seed the most-likely hypotheses, drip-corrected),
+    else from the rect itself. Only iteration order — hence early-exit speed — differs.
+    ECC-validated -> never mis-reads."""
+    ocx = cx if ocx is None else ocx
+    ocy = cy if ocy is None else ocy
     for M in SIZES:
-        cell0 = te / M
+        cell0 = (oside / M) if oside else (te / M)
         for cell in _outward(np.arange(te / (M + 3), te / (M - 1), 0.5), cell0):
             for ddeg in _outward(np.arange(-3, 3.01, 1.0), 0.0):
-                offs = _outward(np.arange(-1.5, 1.51, 0.375) * cell, 0.0)
-                for dcx in offs:
-                    for dcy in offs:
+                base = np.arange(-1.5, 1.51, 0.375) * cell
+                offs_x = _outward(base, ocx - cx)
+                offs_y = _outward(base, ocy - cy)
+                for dcx in offs_x:
+                    for dcy in offs_y:
                         grid = sample_fast(gray, cx + dcx, cy + dcy, cell, M, ang + ddeg)
                         for g, lsc, _ in l_orientations(grid):
                             if lsc < 0.6:
@@ -257,8 +304,8 @@ def decode_auto(gray):
     precise region (ablation: 7/7 alone). (detect_area stays available for callers that
     work on a non-isolated frame.)"""
     regions = [r for r in (detect_data_region(gray),) if r]
-    for cx, cy, te, ang in regions:
-        p, reg = _brute_region(gray, cx, cy, te, ang)
+    for cx, cy, te, ang, ocx, ocy, oside in regions:
+        p, reg = _brute_region(gray, cx, cy, te, ang, ocx, ocy, oside)
         if p is not None:
             return p, reg
     return None, None

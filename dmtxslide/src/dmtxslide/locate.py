@@ -17,8 +17,8 @@ _MAX_AR = 1.3           # square-ish
 _MIN_FILL = 0.4
 # Fine morphology pass at scale=1.0: smaller kernels isolate code sub-blobs in busy labels
 # where the code texture merges into a larger blob under the coarse (7,21) pass.
-_FINE_OPEN = 5
-_FINE_CLOSE = 15
+_FINE_OPEN = 5    # px kernel side
+_FINE_CLOSE = 15  # px kernel side
 
 
 def _kernel(n):
@@ -76,5 +76,5 @@ def propose(gray):
         cands.extend(_level_candidates(gray, sc))
     # Fine-morphology pass at native scale: catches sub-blobs in busy labels where the
     # code texture merges with surrounding text under the coarse (7,21) pass.
-    cands.extend(_level_candidates(gray, 1.0, open_k=_FINE_OPEN, close_k=_FINE_CLOSE))
+    cands.extend(_level_candidates(gray, 1.0, open_k=_FINE_OPEN, close_k=_FINE_CLOSE))  # (recomputes the native-scale density; negligible on this fallback-only path)
     return [(cx, cy, size, ang) for cx, cy, size, ang, _ in _dedup(cands)]

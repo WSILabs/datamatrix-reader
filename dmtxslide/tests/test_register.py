@@ -103,12 +103,7 @@ def test_recover_decodes_offcenter_scene():
     from dmtxslide import synth
     from dmtxslide.register import recover
     rng = random.Random(3)
-    for t in (b"DMTXSLIDE-RECOVER-TEST", b"ABCDEFGHIJKLMNOPQRSTUVWX"):
-        import zxingcpp
-        a = np.asarray(zxingcpp.create_barcode(t.decode(),
-              zxingcpp.BarcodeFormat.DataMatrix).to_image())
-        if a.shape[0] == a.shape[1]:
-            payload = t; break
+    payload = _square_symbol()[0]
     # code in the lower-right (NOT the old upper-left ROI), with border defects
     p = synth.SceneParams(canvas=(900, 1100), cell=18, pos=(0.72, 0.68),
                           rotation_deg=180.0, defects=True, text=True, edges=True)

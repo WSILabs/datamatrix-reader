@@ -40,7 +40,7 @@ from .locate import propose
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 SIZES = (22, 18, 20, 24)            # candidate square ECC200 sizes, common-first
 
-CANON = 470          # canonical normalized code side (px); detectors are tuned for this
+CANON = 470          # normalized code side (px); decode_auto's grid-search cell range is calibrated at this scale
 _MARGIN = 0.6        # crop margin around a proposal, as a fraction of its size
 
 

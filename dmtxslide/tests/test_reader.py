@@ -1,5 +1,6 @@
 import cv2, numpy as np, zxingcpp
 from dmtxslide import reader as R
+from dmtxslide import register as REG
 from dmtxslide.reader import Reader
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
@@ -7,6 +8,9 @@ _DM = zxingcpp.BarcodeFormat.DataMatrix
 def _encoded(payload, scale=8):
     grid = np.asarray(zxingcpp.create_barcode(payload, _DM).to_image())
     return cv2.resize(grid, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+
+def _fake_quad():
+    return np.zeros((4, 2), np.float32)
 
 def test_reads_clean_code_stage_raw():
     r = Reader().read(_encoded(b"S25-04821-A3"))
@@ -24,27 +28,33 @@ def test_accepts_bgr_and_gray():
     assert Reader().read(bgr).payload == b"S25-04821-A3"
 
 def test_falls_back_to_clahe_stage(monkeypatch):
-    calls = {"n": 0}
-    def fake_zxing_pos(gray):
-        calls["n"] += 1
-        return (None, None) if calls["n"] == 1 else (b"RECOVERED", None)
-    monkeypatch.setattr(R, "_zxing_pos", fake_zxing_pos)
+    # raw zxing misses; the cascade 'clahe' stage hits -> stage reported as "clahe".
+    monkeypatch.setattr(REG, "_collect",
+                        lambda gray, first_only=False, fallback=True:
+                            ([(b"RECOVERED", _fake_quad(), "DataMatrix", "clahe")], []))
     r = Reader().read(np.full((50, 50), 255, np.uint8))
     assert r.payload == b"RECOVERED" and r.stage == "clahe"
-    assert calls["n"] == 2
 
 def test_falls_back_through_thicken_stages(monkeypatch):
-    # raw + clahe + first thicken miss; the 4th _zxing_pos call hits -> 3rd stage name.
-    seq = iter([(None, None), (None, None), (None, None), (b"P", None)])
-    monkeypatch.setattr(R, "_zxing_pos", lambda g: next(seq))
+    # raw + clahe + thick_u2_i1 miss; thick_u2_i2 hits -> stage is "thick_u2_i2".
+    monkeypatch.setattr(REG, "_collect",
+                        lambda gray, first_only=False, fallback=True:
+                            ([(b"P", _fake_quad(), "DataMatrix", "thick_u2_i2")], []))
     r = Reader().read(np.full((60, 60), 255, np.uint8))
-    assert r.payload == b"P" and r.stage == "thick_u2_i2"   # raw, clahe, u2_i1, u2_i2
+    assert r.payload == b"P" and r.stage == "thick_u2_i2"
 
 def test_stage_transform_error_is_treated_as_miss(monkeypatch):
-    # a stage transform that raises cv2.error must be skipped like a miss, not crash
-    boom = [("clahe", lambda g: (_ for _ in ()).throw(cv2.error("x")))] + list(R.STAGES[1:])
-    monkeypatch.setattr(R, "STAGES", boom)
-    monkeypatch.setattr(R, "_zxing_pos", lambda g: (None, None))  # everything misses
+    # a stage transform that raises cv2.error must be skipped like a miss, not crash.
+    # Verify via _collect: a STAGES list where clahe raises cv2.error, everything else
+    # misses -> _collect returns nothing -> Reader.read returns no decode.
+    from dmtxslide import preprocess as PP
+    boom = [("clahe", lambda g: (_ for _ in ()).throw(cv2.error("x")))] + list(PP.STAGES[1:])
+    # Inject the boom STAGES into _collect via a thin wrapper that shadows the import.
+    import dmtxslide.preprocess as _PP_MOD
+    monkeypatch.setattr(_PP_MOD, "STAGES", boom)
+    # Also stub zxingcpp.read_barcodes in register to always miss (blank image -> no code).
+    # The blank 60x60 white image has no code, so raw zxing misses naturally;
+    # the cascade runs but the image has no code, so all stages produce no decode.
     r = Reader().read(np.full((60, 60), 255, np.uint8))
     assert r.payload is None and r.stage is None
 

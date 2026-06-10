@@ -290,63 +290,62 @@ def _detector():
     return _yolo or None
 
 
-def _decode_region(gray, cx, cy, size):
-    """Normalize a candidate region, then the format gate: a readable DataMatrix is the
-    fast path; a readable QR/Aztec is NOT a DataMatrix so we skip the repair; otherwise
-    it's a (likely damaged) DataMatrix -> repair. Returns (payload, quad) in ORIGINAL
-    image coords, or (None, None)."""
-    up, tf = _normalize(gray, cx, cy, size)
-    if up is None:
-        return None, None
-    from .detect import format_gate
-    payload, fmt, pos = format_gate(up)
-    if fmt == "DataMatrix":
-        return payload, _unmap_quad(pos, tf)            # gate fast-path
-    if fmt is not None:
-        return None, None                               # QR/Aztec etc. — not a DataMatrix
-    pl, reg = decode_auto(up)                            # nothing read -> damaged DM -> repair
-    if pl is None:
-        return None, None
-    return pl, _unmap_quad(_square_quad(*reg), tf)
-
-
 def recover(gray):
-    """Reader fallback: detect candidate regions (YOLO when its model is installed, else
-    the classical proposer), gate each by format, repair damaged DataMatrix codes. Returns
-    (payload, quad) with quad the 4 corners in ORIGINAL image coords, or (None, None).
-    ECC-validated; classical proposer is the recall safety net when YOLO finds nothing."""
-    det = _detector()
-    if det is not None:
-        for cx, cy, size, _conf in det.detect(gray):
-            pl, quad = _decode_region(gray, cx, cy, size)
-            if pl is not None:
-                return pl, quad
-    for cx, cy, size, _ in propose(gray):
-        pl, quad = _decode_region(gray, cx, cy, size)
-        if pl is not None:
-            return pl, quad
-    return None, None
+    """Reader fallback shim over the unified pipeline: returns (payload, quad) of the first
+    DataMatrix, or (None, None). ECC-validated."""
+    dm, _ = _collect(gray, first_only=True)
+    return (dm[0][0], dm[0][1]) if dm else (None, None)
 
 
 def _quad_center(quad):
     return float(np.asarray(quad)[:, 0].mean()), float(np.asarray(quad)[:, 1].mean())
 
 
-def decode_all(gray, skip=()):
-    """Find EVERY DataMatrix region the detector surfaces, plus non-DM 2D hints. Returns
-    (dm, other, undecoded): dm/other are lists of (payload, quad, format, stage) (quads in
-    ORIGINAL image coords); undecoded is the count of detected regions that yielded no code
-    (a possible faint code -> the caller may want the full-frame cascade). Each region:
-    format-gate -> a readable DataMatrix (gate fast-path) or a readable QR/Aztec (hint, NOT
-    repaired) or, if nothing reads, repair a damaged DataMatrix. `skip` is a list of (cx,cy)
-    centers already found (e.g. by a prior raw pass) — regions near them are skipped, so we
-    don't re-decode or waste a repair on a code/decoy the caller already has."""
-    from .detect import format_gate
+def _pos_quad(p):
+    return np.array([[p.top_left.x, p.top_left.y], [p.top_right.x, p.top_right.y],
+                     [p.bottom_right.x, p.bottom_right.y], [p.bottom_left.x, p.bottom_left.y]],
+                    np.float32)
+
+
+def _collect(gray, first_only=False, fallback=True):
+    """The one read pipeline. Returns (dm, other): lists of (payload, quad, format, stage),
+    quads in ORIGINAL image coords. `first_only` stops at the first DataMatrix (the read()
+    fast path). Passes, cheapest-first, with the cascade BEFORE the expensive repair so a
+    faint code (which the cascade decodes) never wastes a failed reconstruction:
+      1 raw multi-decode (all 2D) on the full frame
+      2 detector regions -> format gate (cheap); undecoded regions deferred
+      3 (conditional) full-frame preprocessing cascade — runs only if a region went
+        undecoded or nothing was found — the safety net for faint codes no detector localizes
+      4 grid-repair the regions still undecoded (broken-border codes the cascade missed)."""
+    from .detect import format_gate, _2D
+    from .preprocess import STAGES, STAGE_SCALE
+    dm, other, seen = [], [], []
+
+    def _take(payload, quad, fmt, stage):
+        c = (float(quad[:, 0].mean()), float(quad[:, 1].mean()))
+        side = float(np.linalg.norm(quad[0] - quad[1]))
+        if any(abs(c[0] - sx) < 0.6 * side and abs(c[1] - sy) < 0.6 * side for sx, sy in seen):
+            return False
+        dm.append((payload, quad, fmt, stage))
+        seen.append(c)
+        return True
+
+    # Pass 1: every directly-decodable 2D code on the full frame.
+    for r in zxingcpp.read_barcodes(np.ascontiguousarray(gray), formats=_2D):
+        q = _pos_quad(r.position)
+        if r.format.name == "DataMatrix":
+            if _take(r.bytes, q, "DataMatrix", "raw") and first_only:
+                return dm, other
+        else:
+            other.append((r.bytes, q, r.format.name, "raw"))
+    if not fallback:
+        return dm, other
+
+    # Pass 2: detector regions -> gate (cheap). Undecoded regions deferred to Pass 3/4.
     det = _detector()
     cands = (det.detect(gray) if det is not None
              else [(cx, cy, s, 0.0) for cx, cy, s, _ in propose(gray)])
-    dm, other, undecoded = [], [], 0
-    seen = list(skip)
+    undec = []
     for cx, cy, size, *_ in cands:
         if any(abs(cx - sx) < 0.5 * size and abs(cy - sy) < 0.5 * size for sx, sy in seen):
             continue
@@ -355,15 +354,31 @@ def decode_all(gray, skip=()):
             continue
         payload, fmt, pos = format_gate(up)
         if fmt == "DataMatrix":
-            dm.append((payload, _unmap_quad(pos, tf), "DataMatrix", "gate"))
-            seen.append((cx, cy))
+            if _take(payload, _unmap_quad(pos, tf), "DataMatrix", "gate") and first_only:
+                return dm, other
         elif fmt is not None:
             other.append((payload, _unmap_quad(pos, tf), fmt, "detector"))
         else:
-            pl, reg = decode_auto(up)               # nothing read -> damaged DM -> repair
-            if pl is not None:
-                dm.append((pl, _unmap_quad(_square_quad(*reg), tf), "DataMatrix", "autoreg"))
-                seen.append((cx, cy))
-            else:
-                undecoded += 1          # a detected region we couldn't decode -> maybe faint
-    return dm, other, undecoded
+            undec.append((cx, cy, size, up, tf))
+
+    # Pass 3 (conditional): full-frame cascade for faint codes.
+    if undec or not dm:
+        for name, transform in STAGES:
+            try:
+                out = transform(gray)
+            except cv2.error:
+                continue
+            for r in zxingcpp.read_barcodes(np.ascontiguousarray(out), formats=_DM):
+                q = _pos_quad(r.position) / STAGE_SCALE[name]
+                if _take(r.bytes, q, "DataMatrix", name) and first_only:
+                    return dm, other
+
+    # Pass 4: repair the still-undecoded regions (broken-border codes the cascade missed).
+    for cx, cy, size, up, tf in undec:
+        if any(abs(cx - sx) < 0.6 * size and abs(cy - sy) < 0.6 * size for sx, sy in seen):
+            continue                          # the cascade already got this region
+        pl, reg = decode_auto(up)
+        if pl is not None:
+            if _take(pl, _unmap_quad(_square_quad(*reg), tf), "DataMatrix", "autoreg") and first_only:
+                return dm, other
+    return dm, other

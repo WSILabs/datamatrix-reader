@@ -20,9 +20,6 @@ import cv2
 import numpy as np
 import zxingcpp
 
-from .preprocess import STAGES, STAGE_SCALE
-from .register import recover
-
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 _2D = (zxingcpp.BarcodeFormat.DataMatrix, zxingcpp.BarcodeFormat.QRCode,
        zxingcpp.BarcodeFormat.Aztec)
@@ -101,74 +98,20 @@ class ReadAllResult:
 
 
 class Reader:
-    def read_all(self, image: np.ndarray, fallback: bool = True) -> ReadAllResult:
-        """All DataMatrix codes on the image (each with quad+box, original coords), plus
-        non-DM 2D codes (QR/Aztec) as tagged hints. Pass 1 raw multi-decode; Pass 2 the
-        detector (YOLO/classical) surfaces additional/damaged codes via gate+repair; Pass 3
-        the full-frame preprocessing cascade — the detection-free safety net for faint codes
-        no detector could localize — runs ONLY when a detected region went undecoded or
-        nothing was found, so the clean common case skips it entirely."""
-        from .register import decode_all, _quad_center
-        t0 = time.perf_counter()
-        gray = _gray(image)
-        dm: list[Code] = []
-        seen: list[tuple[float, float]] = []
-        other: list[Code] = []
-
-        def _add(payload, q, fmt, stage):
-            cx, cy = _quad_center(q)
-            side = float(np.linalg.norm(q[0] - q[1]))
-            if any(abs(cx - sx) < 0.6 * side and abs(cy - sy) < 0.6 * side for sx, sy in seen):
-                return
-            dm.append(Code(payload, q, fmt, stage))
-            seen.append((cx, cy))
-
-        # Pass 1: every directly-decodable 2D code on the full frame (DM + QR + Aztec).
-        for r in zxingcpp.read_barcodes(np.ascontiguousarray(gray), formats=_2D):
-            q = _pos_quad(r.position)
-            if r.format.name == "DataMatrix":
-                dm.append(Code(r.bytes, q, "DataMatrix", "raw")); seen.append(_quad_center(q))
-            else:
-                other.append(Code(r.bytes, q, r.format.name, "raw"))
-        if fallback:
-            # Pass 2: detector regions -> gate/repair for codes raw missed (skip regions
-            # Pass 1 already decoded, so we don't re-decode or waste a repair on them).
-            ddm, doth, undecoded = decode_all(gray, skip=seen)
-            for pl, q, fmt, st in ddm:
-                _add(pl, q, fmt, st)
-            for pl, q, fmt, st in doth:
-                other.append(Code(pl, q, fmt, st))
-            # Pass 3 (conditional): a detected region didn't decode (maybe a faint code), or
-            # nothing was found at all (a code no detector could localize) -> full-frame
-            # cascade. Skipped when every detected code decoded -> the common case stays fast.
-            if undecoded > 0 or not dm:
-                for name, transform in STAGES:
-                    try:
-                        transformed = transform(gray)
-                    except cv2.error:
-                        continue
-                    for r in zxingcpp.read_barcodes(np.ascontiguousarray(transformed), formats=_DM):
-                        _add(r.bytes, _pos_quad(r.position) / STAGE_SCALE[name], "DataMatrix", name)
-        return ReadAllResult(dm, other, (time.perf_counter() - t0) * 1000)
-
     def read(self, image: np.ndarray, budget_ms: float = 250.0,
              fallback: bool = True) -> ReadResult:
+        from .register import _collect
         t0 = time.perf_counter()
-        gray = _gray(image)
-        payload, quad = _zxing_pos(gray)
-        stage = "raw" if payload is not None else None
-        if payload is None:
-            for name, transform in STAGES:
-                try:
-                    cand, qpos = _zxing_pos(transform(gray))
-                except cv2.error:
-                    continue
-                if cand is not None:
-                    payload, stage = cand, name
-                    quad = qpos / STAGE_SCALE[name] if qpos is not None else None  # stage upscales -> back to original
-                    break
-        if payload is None and fallback:
-            cand, qquad = recover(gray)
-            if cand is not None:
-                payload, stage, quad = cand, "autoreg", qquad
-        return ReadResult(payload, stage, (time.perf_counter() - t0) * 1000, quad=quad)
+        dm, _ = _collect(_gray(image), first_only=True, fallback=fallback)
+        ms = (time.perf_counter() - t0) * 1000
+        if dm:
+            payload, quad, _fmt, stage = dm[0]
+            return ReadResult(payload, stage, ms, quad=quad)
+        return ReadResult(None, None, ms)
+
+    def read_all(self, image: np.ndarray, fallback: bool = True) -> ReadAllResult:
+        from .register import _collect
+        t0 = time.perf_counter()
+        dm, other = _collect(_gray(image), first_only=False, fallback=fallback)
+        ms = (time.perf_counter() - t0) * 1000
+        return ReadAllResult([Code(*d) for d in dm], [Code(*o) for o in other], ms)

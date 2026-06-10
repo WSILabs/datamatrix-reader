@@ -43,6 +43,17 @@ def test_falls_back_through_thicken_stages(monkeypatch):
     r = Reader().read(np.full((60, 60), 255, np.uint8))
     assert r.payload == b"P" and r.stage == "thick_u2_i2"
 
+def test_u4_gate_skips_oversampled_runs_small_and_blind():
+    # The cascade's costly 4x stages run only for under-sampled (small/dense) regions or
+    # when nothing was localized. Threshold is px/module = size/_EST_MODULES < _PXMOD_GATE.
+    big = (REG._PXMOD_GATE + 2) * REG._EST_MODULES   # comfortably oversampled
+    small = (REG._PXMOD_GATE - 2) * REG._EST_MODULES  # under-sampled
+    assert REG._needs_u4([]) is True                  # blind safety net
+    assert REG._needs_u4([big]) is False              # oversampled -> skip u4
+    assert REG._needs_u4([small]) is True             # small -> run u4
+    assert REG._needs_u4([big, small]) is True        # any small region triggers u4
+
+
 def test_stage_transform_error_is_treated_as_miss(monkeypatch):
     # a stage transform that raises cv2.error must be skipped like a miss, not crash.
     # Verify via _collect: a STAGES list where clahe raises cv2.error, everything else

@@ -48,6 +48,21 @@ SIZES = (22, 18, 20, 24)            # candidate square ECC200 sizes, common-firs
 CANON = 470          # normalized code side (px); decode_auto's grid-search cell range is calibrated at this scale
 _MARGIN = 0.6        # crop margin around a proposal, as a fraction of its size
 
+# The cascade's 4x-upscale (u4) stages cost ~3x a u2 stage (16MP vs 4MP full-frame zxing
+# scan) and only help UNDER-SAMPLED symbols — zxing needs ~3-5 px/module, so u4 earns its
+# keep only once native px/module drops toward the floor (small/dense/low-res codes). When
+# the detector localizes a comfortably-oversampled code we skip u4 (full-frame retained).
+_EST_MODULES = 24    # nominal modules across a symbol incl. quiet zone (M=22 dominates this corpus)
+_PXMOD_GATE = 6.0    # run u4 only when est. px/module (detector size / _EST_MODULES) is below this
+
+
+def _needs_u4(region_sizes):
+    """Whether the cascade should run the costly 4x-upscale (u4) stages. True when no region
+    was localized (blind safety net) or any region is small enough that even u2 leaves it
+    under-sampled (est. px/module < _PXMOD_GATE); False when every region is oversampled."""
+    return (not region_sizes
+            or any(s / _EST_MODULES < _PXMOD_GATE for s in region_sizes))
+
 
 def _zxing(img: np.ndarray) -> bytes | None:
     res = zxingcpp.read_barcodes(np.ascontiguousarray(img), formats=_DM)
@@ -361,9 +376,14 @@ def _collect(gray, first_only=False, fallback=True):
         else:
             undec.append((cx, cy, size, up, tf))
 
-    # Pass 3 (conditional): full-frame cascade for faint codes.
+    # Pass 3 (conditional): full-frame cascade for faint codes. Skip the costly u4 stages
+    # when every localized region is comfortably oversampled (run them only for small/dense
+    # regions, or when we have no localization at all — the blind safety net).
     if undec or not dm:
+        run_u4 = _needs_u4([size for _, _, size, _, _ in undec])
         for name, transform in STAGES:
+            if not run_u4 and name.startswith("thick_u4"):
+                continue
             try:
                 out = transform(gray)
             except cv2.error:

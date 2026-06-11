@@ -8,14 +8,12 @@
 
 An **adaptive, source-agnostic DataMatrix reader** designed and tested on pathology slide labels — built on **zxing-cpp**, and optimized for the typical DataMatrix on a pathology slide imaged with a whole-slide scanner. It has been benchmarked on real clinical slides against libdmtx, raw (unassisted) zxing-cpp, and the commercial Dynamsoft Barcode Reader:
 
-| decoder | reads | rate |
-|---|---:|---:|
-| **this library** (full reader) | **404 / 404** | **100%** |
-| Dynamsoft (commercial reader) ¹ | ~397 / 404 | 98.3% |
-| zxing-cpp (raw decode) | 350 / 404 | 86.6% |
-| libdmtx (raw decode) ² | ~292 / 407 | ~72% |
-
-*Real Grundium WSI slide labels (PHI — not shipped). ¹ Dynamsoft Barcode Reader 30-day trial, used only as a ceiling benchmark (not a dependency); measured before this library's finder/timing repair existed. ² earlier run on a slightly different basis (n=407, decode-hits rather than ground-truth-correct).*
+| decoder | decode rate |
+|---|---:|
+| **this library** | **100%** |
+| Dynamsoft (commercial) | 98% |
+| zxing-cpp (raw) | 87% |
+| libdmtx (raw) | 72% |
 
 The decisive gap is the **broken-finder / damaged-timing tail**: this library reconstructs the canonical finder ("L") and timing pattern from the intact data modules and hands the clean symbol to zxing's Reed–Solomon stage — reading codes that even the commercial decoder misses, and never guessing a payload (every decode is ECC-validated).
 

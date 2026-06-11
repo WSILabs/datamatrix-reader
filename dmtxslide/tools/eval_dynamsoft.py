@@ -21,7 +21,7 @@ from pathlib import Path
 
 import cv2
 
-from dmtxslide.reader import Reader
+from datamatrix_reader.reader import Reader
 
 
 def _license(arg: str | None) -> str:

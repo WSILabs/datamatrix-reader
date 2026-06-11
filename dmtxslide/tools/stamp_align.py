@@ -38,7 +38,7 @@ SIZES = [10, 12, 14, 16, 18, 20, 22, 24, 26]      # valid square ECC200 sizes
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 
 # DataMatrix border repaint + zxing call live in the package (single source of truth).
-from dmtxslide.register import border_mask, render_symbol, _zxing       # noqa: E402,F401
+from datamatrix_reader.register import border_mask, render_symbol, _zxing       # noqa: E402,F401
 
 
 def module_center(lx: float, ly: float, cx: float, cy: float, deg: float):

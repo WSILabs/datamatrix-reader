@@ -21,9 +21,9 @@ from pathlib import Path
 import cv2
 import zxingcpp
 
-from dmtxslide.reader import Reader
+from datamatrix_reader.reader import Reader
 from bench.harness import _iter_synth, _payload_pool
-from dmtxslide.synth import strata
+from datamatrix_reader.synth import strata
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 _reader = Reader()

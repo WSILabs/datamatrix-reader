@@ -21,11 +21,11 @@ import glob
 import cv2
 import numpy as np
 
-import dmtxslide.register as R
-from dmtxslide.register import (SIZES, _outward, sample_fast, l_orientations,
+import datamatrix_reader.register as R
+from datamatrix_reader.register import (SIZES, _outward, sample_fast, l_orientations,
                                 render_symbol, _zxing, _square_quad, _normalize, _detector,
                                 detect_data_region)
-from dmtxslide.detect import format_gate
+from datamatrix_reader.detect import format_gate
 import zxingcpp
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix

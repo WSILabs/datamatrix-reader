@@ -14,7 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from dmtxslide.reader import Reader
+from datamatrix_reader.reader import Reader
 
 ROOT = Path("/tmp/dm_yolo")
 CORPUS = "corpus/wsi_labels"

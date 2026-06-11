@@ -1,5 +1,5 @@
 """Export the trained YOLO weights to ONNX and install it where the Reader looks
-(src/dmtxslide/models/dm_yolo.onnx). Run after tools/train_yolo.py.
+(src/datamatrix_reader/models/dm_yolo.onnx). Run after tools/train_yolo.py.
 
     .venv/bin/python -m tools.export_yolo [weights.pt]
 """
@@ -10,7 +10,7 @@ from pathlib import Path
 from ultralytics import YOLO
 
 DEFAULT_WEIGHTS = "/tmp/dm_yolo_runs/dm_neg/weights/best.pt"
-DST = Path("src/dmtxslide/models/dm_yolo.onnx")
+DST = Path("src/datamatrix_reader/models/dm_yolo.onnx")
 
 
 def main():

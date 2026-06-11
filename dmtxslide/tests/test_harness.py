@@ -4,7 +4,7 @@ import random
 import numpy as np
 
 from bench.harness import _payload_pool, run
-from dmtxslide.synth import DegradeParams, degrade, render
+from datamatrix_reader.synth import DegradeParams, degrade, render
 
 
 def test_payload_pool_spans_multiple_symbol_sizes():

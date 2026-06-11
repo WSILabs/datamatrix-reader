@@ -16,7 +16,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from dmtxslide.synth import render, degrade, DegradeParams, AXES
+from datamatrix_reader.synth import render, degrade, DegradeParams, AXES
 
 SUBS = dict(zip(["white", "yellow", "pink", "green", "blue", "laser"],
                 AXES["substrate"]))

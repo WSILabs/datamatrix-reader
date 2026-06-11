@@ -15,7 +15,7 @@ import numpy as np
 import tkinter as tk
 from PIL import Image, ImageTk, ImageDraw
 
-from dmtxslide.reader import Reader
+from datamatrix_reader.reader import Reader
 
 CORPUS = Path("corpus/wsi_labels")
 FOLDER = CORPUS / "manual_L_fix"

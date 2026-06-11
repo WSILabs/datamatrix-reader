@@ -15,7 +15,7 @@ import zxingcpp
 from PIL import Image
 from ultralytics import YOLO
 
-import dmtxslide.register as R
+import datamatrix_reader.register as R
 
 MODELS = {"dm_neg": "/tmp/dm_yolo_runs/dm_neg/weights/best.pt",
           "dm_real": "/tmp/dm_yolo_runs/dm_real/weights/best.pt"}

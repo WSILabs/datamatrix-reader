@@ -26,8 +26,8 @@ from pathlib import Path
 
 import cv2
 
-from dmtxslide.reader import Reader
-from dmtxslide.synth import strata
+from datamatrix_reader.reader import Reader
+from datamatrix_reader.synth import strata
 
 
 def _payload_pool() -> list[bytes]:

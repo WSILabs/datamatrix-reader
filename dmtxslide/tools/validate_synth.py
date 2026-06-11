@@ -7,9 +7,9 @@ separately, with the worst stratum surfaced.
 import random
 import numpy as np
 import zxingcpp
-from dmtxslide import synth
-from dmtxslide.locate import propose
-from dmtxslide.register import recover
+from datamatrix_reader import synth
+from datamatrix_reader.locate import propose
+from datamatrix_reader.register import recover
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 PAYLOADS = [p for p in (b"S25-04821 A3-1 HE", b"PCAA00028208 A1-1",

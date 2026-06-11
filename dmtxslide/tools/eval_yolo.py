@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-import dmtxslide.register as R
+import datamatrix_reader.register as R
 
 WEIGHTS = "/tmp/dm_yolo_runs/dm/weights/best.pt"
 

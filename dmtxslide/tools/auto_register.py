@@ -1,6 +1,6 @@
-"""Validation harness for dmtxslide.register on the 7 cascade-residual WSI crops
+"""Validation harness for datamatrix_reader.register on the 7 cascade-residual WSI crops
 (corpus/wsi_labels/manual_L_fix/*.png). The registration logic lives in the package
-(src/dmtxslide/register.py); this just runs decode_auto on each crop and reports the
+(src/datamatrix_reader/register.py); this just runs decode_auto on each crop and reports the
 recovered grid params vs the human stamp-tool alignments.
 
     .venv/bin/python -m tools.auto_register
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import cv2
 
-from dmtxslide.register import decode_auto, detect_area
+from datamatrix_reader.register import decode_auto, detect_area
 
 CORPUS = Path("corpus/wsi_labels")
 FOLDER = CORPUS / "manual_L_fix"

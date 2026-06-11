@@ -1,7 +1,7 @@
 import cv2, numpy as np, zxingcpp
-from dmtxslide import reader as R
-from dmtxslide import register as REG
-from dmtxslide.reader import Reader
+from datamatrix_reader import reader as R
+from datamatrix_reader import register as REG
+from datamatrix_reader.reader import Reader
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 
@@ -58,10 +58,10 @@ def test_stage_transform_error_is_treated_as_miss(monkeypatch):
     # a stage transform that raises cv2.error must be skipped like a miss, not crash.
     # Verify via _collect: a STAGES list where clahe raises cv2.error, everything else
     # misses -> _collect returns nothing -> Reader.read returns no decode.
-    from dmtxslide import preprocess as PP
+    from datamatrix_reader import preprocess as PP
     boom = [("clahe", lambda g: (_ for _ in ()).throw(cv2.error("x")))] + list(PP.STAGES[1:])
     # Inject the boom STAGES into _collect via a thin wrapper that shadows the import.
-    import dmtxslide.preprocess as _PP_MOD
+    import datamatrix_reader.preprocess as _PP_MOD
     monkeypatch.setattr(_PP_MOD, "STAGES", boom)
     # Also stub zxingcpp.read_barcodes in register to always miss (blank image -> no code).
     # The blank 60x60 white image has no code, so raw zxing misses naturally;
@@ -93,7 +93,7 @@ def test_l_orientations_matches_eager_rotation():
 
 def test_read_all_finds_multiple_datamatrix_and_qr_hint():
     import numpy as np, cv2, zxingcpp
-    from dmtxslide.reader import Reader
+    from datamatrix_reader.reader import Reader
     _DM = zxingcpp.BarcodeFormat.DataMatrix
 
     def tile(payload, fmt, scale=12):

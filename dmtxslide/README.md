@@ -1,4 +1,4 @@
-# dmtxslide
+# datamatrix-reader
 
 An **adaptive, source-agnostic DataMatrix reader** built on top of libdmtx,
 aimed at the slide-label domain but designed to handle arbitrary printers,
@@ -71,7 +71,7 @@ only when it lifts a weak stratum without regressing others
 ## Layout
 
 ```
-src/dmtxslide/
+src/datamatrix_reader/
   _build_dmtx.py   cffi build + C shim (staged decode, timeout, encode)
   binding.py       typed wrapper → StageResult (found/decoded/bbox/px-module)
   adapt.py         contrast-channel selection, scale normalisation
@@ -92,7 +92,7 @@ experiments/     config files, one per cascade/param variant
 ```bash
 # native deps: apt install libdmtx-dev   (or: brew install libdmtx)
 pip install -e .
-python -m dmtxslide._build_dmtx           # compile the shim against libdmtx
+python -m datamatrix_reader._build_dmtx           # compile the shim against libdmtx
 
 # baseline on synthetic strata
 python -m bench.harness --synth --per-cell 2 --budget 250 --out runs/baseline.json
@@ -105,8 +105,8 @@ python -m bench.harness --corpus corpus --budget 250 --out runs/real.json
 ```
 
 ```python
-from dmtxslide.reader import Reader
-from dmtxslide.validate import RegexValidator
+from datamatrix_reader.reader import Reader
+from datamatrix_reader.validate import RegexValidator
 
 reader = Reader(validator=RegexValidator(r'^S\d{2}-\d{5}-A\d$'))
 res = reader.read(image_bgr, budget_ms=250)   # res.payload, res.rung, res.elapsed_ms

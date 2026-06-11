@@ -1,7 +1,7 @@
 import random
 import numpy as np
-from dmtxslide import synth
-from dmtxslide.locate import propose
+from datamatrix_reader import synth
+from datamatrix_reader.locate import propose
 
 
 def _payload():

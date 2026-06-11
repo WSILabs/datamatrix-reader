@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 import zxingcpp
 
-from dmtxslide import synth
+from datamatrix_reader import synth
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 ROOT = Path("/tmp/dm_yolo")

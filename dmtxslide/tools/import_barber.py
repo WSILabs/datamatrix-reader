@@ -1,4 +1,4 @@
-"""Adapter: BarBeR dataset -> a dmtxslide --corpus directory of DataMatrix codes.
+"""Adapter: BarBeR dataset -> a datamatrix_reader --corpus directory of DataMatrix codes.
 
 BarBeR (https://universe... / VGG VIA annotations) bundles 12 public barcode
 datasets. We keep only **DataMatrix** regions that carry a decoded `String`, so

@@ -5,9 +5,9 @@ import cv2
 import numpy as np
 import zxingcpp
 
-from dmtxslide import synth
-from dmtxslide.reader import Reader
-from dmtxslide.register import _zxing
+from datamatrix_reader import synth
+from datamatrix_reader.reader import Reader
+from datamatrix_reader.register import _zxing
 
 
 def _contrast(substrate_ink):

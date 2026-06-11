@@ -25,8 +25,8 @@ import cv2
 import numpy as np
 import zxingcpp
 
-from dmtxslide.reader import Reader, _gray
-from dmtxslide import preprocess as pp
+from datamatrix_reader.reader import Reader, _gray
+from datamatrix_reader import preprocess as pp
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 

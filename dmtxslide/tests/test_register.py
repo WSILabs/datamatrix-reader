@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import zxingcpp
 
-from dmtxslide.register import (decode_auto, detect_area, border_mask, render_symbol,
+from datamatrix_reader.register import (decode_auto, detect_area, border_mask, render_symbol,
                                 _square_from_coverage, _fft_pitch)
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
@@ -123,7 +123,7 @@ def test_decode_auto_returns_none_on_blank():
 def test_decode_auto_uses_two_detectors():
     # the decode path must no longer call detect_dark_region
     import inspect
-    from dmtxslide import register
+    from datamatrix_reader import register
     src = inspect.getsource(register.decode_auto)
     assert "detect_dark_region" not in src
     assert "detect_area" in src and "detect_data_region" in src
@@ -131,8 +131,8 @@ def test_decode_auto_uses_two_detectors():
 
 def test_recover_decodes_offcenter_scene():
     import random
-    from dmtxslide import synth
-    from dmtxslide.register import recover
+    from datamatrix_reader import synth
+    from datamatrix_reader.register import recover
     rng = random.Random(3)
     payload = _square_symbol()[0]
     # code in the lower-right (NOT the old upper-left ROI), with border defects
@@ -144,8 +144,8 @@ def test_recover_decodes_offcenter_scene():
 
 def test_recover_decodes_damaged_scenes():
     import random
-    from dmtxslide import synth
-    from dmtxslide.register import recover
+    from datamatrix_reader import synth
+    from datamatrix_reader.register import recover
     rng = random.Random(7)
     payload = None
     for t in (b"DMTXSLIDE-GUIDED-TEST1", b"ABCDEFGHIJKLMNOPQRSTUVWX"):
@@ -169,8 +169,8 @@ def test_brute_region_order_preserves_recovery():
     # center-out ordering must not change WHICH codes decode — a damaged off-center
     # scene that decoded before must still decode.
     import random
-    from dmtxslide import synth
-    from dmtxslide.register import recover
+    from datamatrix_reader import synth
+    from datamatrix_reader.register import recover
     rng = random.Random(11)
     payload = _square_symbol()[0]
     p = synth.SceneParams(canvas=(850, 1000), cell=20, pos=(0.6, 0.4),
@@ -182,8 +182,8 @@ def test_brute_region_order_preserves_recovery():
 
 def test_recover_returns_quad_enclosing_code():
     import random
-    from dmtxslide import synth
-    from dmtxslide.register import recover
+    from datamatrix_reader import synth
+    from datamatrix_reader.register import recover
     rng = random.Random(5)
     payload = _square_symbol()[0]
     p = synth.SceneParams(canvas=(900, 1100), cell=18, pos=(0.6, 0.45),

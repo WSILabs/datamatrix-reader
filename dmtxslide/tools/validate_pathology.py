@@ -8,7 +8,7 @@ import os
 import numpy as np
 import cv2
 from PIL import Image
-from dmtxslide.reader import Reader
+from datamatrix_reader.reader import Reader
 
 
 def load(p):

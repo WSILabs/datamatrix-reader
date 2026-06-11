@@ -1,6 +1,6 @@
 import numpy as np
 
-from dmtxslide import preprocess as pp
+from datamatrix_reader import preprocess as pp
 
 
 def test_stages_named_and_ordered():

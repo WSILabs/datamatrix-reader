@@ -16,7 +16,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from dmtxslide.reader import Reader
+from datamatrix_reader.reader import Reader
 
 CORPUS = Path("corpus/wsi_labels")
 

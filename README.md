@@ -6,11 +6,20 @@
 ![Detector](https://img.shields.io/badge/detector-YOLOv8%20%C2%B7%20ONNX-9cf?style=flat-square)
 [![Tests](https://github.com/WSILabs/datamatrix-reader/actions/workflows/tests.yml/badge.svg)](https://github.com/WSILabs/datamatrix-reader/actions/workflows/tests.yml)
 
-An **adaptive, source-agnostic DataMatrix reader** designed and tested on pathology slide labels — built on **zxing-cpp**, and optimized for the typical datamatrix on a pathology slide imaged using a whole slide scanner. This library has been tested against real clinical slides against libdmtx, unassisted zxing.cpp, and the commerical library dyna???, with the following results:
+An **adaptive, source-agnostic DataMatrix reader** designed and tested on pathology slide labels — built on **zxing-cpp**, and optimized for the typical DataMatrix on a pathology slide imaged with a whole-slide scanner. It has been benchmarked on real clinical slides against libdmtx, raw (unassisted) zxing-cpp, and the commercial Dynamsoft Barcode Reader:
 
-<add actual numbers here>
+| decoder | reads | rate |
+|---|---:|---:|
+| **this library** (full reader) | **404 / 404** | **100%** |
+| Dynamsoft (commercial reader) ¹ | ~397 / 404 | 98.3% |
+| zxing-cpp (raw decode) | 350 / 404 | 86.6% |
+| libdmtx (raw decode) ² | ~292 / 407 | ~72% |
 
-Note that this library is optimized for typical WSI-imaged slide labels, i.e., well and evenly-lit images, approximately X x Y sized images, minimal rotation (< Z degrees), and reasonably-sized mdoules (> U pxiels). It has been hardened for the real codes that whole-slide scanners actually capture: faint or over-inked print, horizontal line printing defects, glare, and especially the defects in the the finder ("L") and timer patterns with which zxing struggles. This library is not optimized for oblique, heavily skewed, heavily obscured, or poorly illuminated barcodes.
+*Real Grundium WSI slide labels (PHI — not shipped). ¹ Dynamsoft Barcode Reader 30-day trial, used only as a ceiling benchmark (not a dependency); measured before this library's finder/timing repair existed. ² earlier run on a slightly different basis (n=407, decode-hits rather than ground-truth-correct).*
+
+The decisive gap is the **broken-finder / damaged-timing tail**: this library reconstructs the canonical finder ("L") and timing pattern from the intact data modules and hands the clean symbol to zxing's Reed–Solomon stage — reading codes that even the commercial decoder misses, and never guessing a payload (every decode is ECC-validated).
+
+Note that this library is optimized for typical WSI-imaged slide labels: well- and evenly-lit captures, roughly **1200×850 px** label crops, near-cardinal orientation (any 90° rotation; in-plane skew within ~±15°), and reasonably-sized modules (**≳5 px each** — ~9 px/module on the WSI corpus). It has been hardened for the real defects whole-slide scanners actually produce: faint or over-inked print, horizontal line-printing defects, glare, and especially the damaged finder ("L") and timing patterns that zxing alone struggles with. It is not optimized for oblique, heavily skewed or perspective-warped, heavily obscured, or poorly-lit barcodes.
 
 It does two jobs:
 
@@ -26,20 +35,27 @@ reader never mis-reads.
 
 A miss-driven ladder: cheap things first, expensive recovery only when needed.
 
-```
-image ─▶ zxing raw decode ──────────────────────────────── hit ▶ done  (p50 ~4 ms)
-            │ miss
-            ▼
-         YOLO detector localizes the code(s) ─▶ format-gate (zxing on the tight crop):
-            │                                     DataMatrix ▶ done · QR/Aztec ▶ tagged hint
-            │ undecoded / faint
-            ▼
-         ink-thickening cascade (full frame): CLAHE+upscale ▶ Otsu ▶ progressive
-            │                                   erosion (grow ink) ▶ Sauvola  ─▶ hit ▶ done
-            │ broken finder/timing
-            ▼
-         registration repair: localize ▶ sample the module grid ▶ REPAINT the canonical
-            finder/timing ▶ hand the clean symbol to zxing  ─▶ hit ▶ done
+```mermaid
+flowchart TD
+    img(["image"]) --> raw["zxing raw decode"]
+    raw -->|"miss"| yolo["YOLO detector<br/>localizes the code(s)"]
+    yolo --> gate{"format-gate<br/>zxing on tight crop"}
+    gate -->|"undecoded / faint"| casc["ink-thickening cascade<br/>CLAHE+upscale → Otsu → grow ink → Sauvola"]
+    casc -->|"broken finder / timing"| rep["registration repair<br/>sample grid → repaint L/timing → zxing ECC"]
+
+    raw -->|"hit · p50 ~4 ms"| done(["✓ decoded · ECC-validated"])
+    gate -->|"DataMatrix"| done
+    casc -->|"hit"| done
+    rep -->|"recovered"| done
+    gate -->|"QR / Aztec"| hint(["tagged non-DM hint"])
+    rep -->|"unrecoverable"| none(["✗ no decode"])
+
+    classDef ok fill:#1f883d,stroke:#1a7f37,color:#ffffff
+    classDef tag fill:#bf8700,stroke:#9a6700,color:#ffffff
+    classDef bad fill:#cf222e,stroke:#a40e26,color:#ffffff
+    class done ok
+    class hint tag
+    class none bad
 ```
 
 - **zxing-first.** On real captures a modern decoder beats hand-tuned preprocessing;

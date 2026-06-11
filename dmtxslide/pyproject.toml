@@ -21,3 +21,8 @@ yolo-train = ["ultralytics>=8.3"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Ship the YOLO detector weights inside the wheel (12MB). Without this, an installed
+# copy has no model and the Reader silently falls back to the classical proposer.
+[tool.setuptools.package-data]
+datamatrix_reader = ["models/*.onnx"]

@@ -17,7 +17,7 @@ An **adaptive, source-agnostic DataMatrix reader** designed and tested on pathol
 
 The decisive gap is the **broken-finder / damaged-timing tail**: this library reconstructs the canonical finder ("L") and timing pattern from the intact data modules and hands the clean symbol to zxing's Reed–Solomon stage — reading codes that even the commercial decoder misses, and never guessing a payload (every decode is ECC-validated).
 
-Note that this library is optimized for typical WSI-imaged slide labels: well- and evenly-lit captures, roughly **1200×850 px** label crops, near-cardinal orientation (any 90° rotation; in-plane skew within ~±15°), and reasonably-sized modules (**≳5 px each** — ~9 px/module on the WSI corpus). It has been hardened for the real defects whole-slide scanners actually produce: faint or over-inked print, horizontal line-printing defects, glare, and especially the damaged finder ("L") and timing patterns that zxing alone struggles with. It is not optimized for oblique, heavily skewed or perspective-warped, heavily obscured, or poorly-lit barcodes.
+Note that this library is optimized for typical WSI-imaged slide labels: well- and evenly-lit captures, roughly **1200×850 px** label crops, near-cardinal orientation (any 90° rotation; in-plane skew within ~±15°), and reasonably-sized modules (**≳5 px each** — ~9 px/module on the WSI corpus). It has been hardened for the real defects whole-slide scanners actually encounter: faint or over-inked print, horizontal line-printing defects, glare, and especially the damaged finder ("L") and timing patterns that zxing alone struggles with. It is not optimized for oblique, heavily skewed or perspective-warped, heavily obscured, or poorly-lit barcodes.
 
 It does two jobs:
 
@@ -66,9 +66,9 @@ flowchart TD
   the canonical finder/timing, and lets zxing do the ECC — recovering codes a decoder alone
   can't, without ever guessing a payload.
 - **Learned detector** (`detect.py`): a YOLOv8-nano ONNX model (run via onnxruntime, no
-  torch at inference) localizes DataMatrix and rejects look-alikes (QR/Aztec/cassette mesh).
-  It **ships in the wheel**; if it or onnxruntime is absent, the reader falls back to a
-  classical texture/gradient proposer (`locate.py`).
+  torch at inference) localizes DataMatrix and rejects look-alikes (QR/Aztec/mesh). It
+  **ships in the wheel** and onnxruntime is a core dependency, so the detector is always on
+  (a classical texture/gradient proposer in `locate.py` stays as an internal safety net).
 
 ## Install
 
@@ -89,7 +89,7 @@ conda create -n dmr python=3.11 && conda activate dmr && pip install -e .
 
 Core deps (numpy, opencv-python-headless, zxing-cpp, onnxruntime) install automatically.
 Extras: `[yolo-train]` = ultralytics (detector training/export, dev only); `[tools]` =
-pillow (GUI helper tools). (`[yolo]` is kept as a no-op alias — the detector is now core.)
+pillow (GUI helper tools).
 
 ## Usage
 
@@ -148,8 +148,8 @@ src/datamatrix_reader/
   reader.py       public API: Reader.read / read_all -> ReadResult / ReadAllResult
   register.py     unified pipeline (_collect) + registration repair + region detectors
   preprocess.py   ink-thickening cascade stages (px/module-gated upscale)
-  detect.py       YOLO detector (onnxruntime) + format gate; classical fallback
-  locate.py       decoder-free region proposer (used when the model is absent)
+  detect.py       YOLO detector (onnxruntime, core) + format gate
+  locate.py       decoder-free region proposer (internal safety net)
   synth.py        parametric synthetic label scenes for generalization testing
   validate.py     optional payload validators (application-layer)
   models/dm_yolo.onnx   the shipped detector weights

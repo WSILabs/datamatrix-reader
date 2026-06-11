@@ -1,11 +1,13 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "datamatrix-reader"
 version = "0.0.1"
 description = "Robust DataMatrix reader for pathology slide labels (zxing-cpp core + YOLO detector + finder-pattern repair)"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 keywords = [
     "datamatrix", "barcode", "barcode-reader", "2d-barcode", "decoder", "zxing",

@@ -1,5 +1,6 @@
 # datamatrix-reader
 
+![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)
 ![Decoder](https://img.shields.io/badge/decoder-zxing--cpp-orange?style=flat-square)
 ![Detector](https://img.shields.io/badge/detector-YOLOv8%20%C2%B7%20ONNX-9cf?style=flat-square)

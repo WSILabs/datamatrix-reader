@@ -5,7 +5,7 @@ to the classical proposer. Uses a synthetic (PHI-free) code, so it's safe to run
 Run it against a CLEAN install to actually exercise packaging (not the editable dev tree):
 
     python -m build  # or: pip wheel . --no-deps -w dist/
-    python -m venv /tmp/dmr_env && /tmp/dmr_env/bin/pip install "dist/datamatrix_reader-*.whl[yolo]"
+    python -m venv /tmp/dmr_env && /tmp/dmr_env/bin/pip install dist/datamatrix_reader-*.whl
     /tmp/dmr_env/bin/python tools/smoke_install.py
 
 Exits non-zero on any failure.

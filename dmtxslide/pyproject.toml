@@ -7,15 +7,22 @@ name = "datamatrix-reader"
 version = "0.0.1"
 description = "Source-agnostic DataMatrix reader for slide labels (zxing-cpp core)"
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.24", "opencv-python-headless>=4.8", "zxing-cpp>=2.0"]
+dependencies = [
+    "numpy>=1.24",
+    "opencv-python-headless>=4.8",
+    "zxing-cpp>=2.0",
+    # The YOLO detector is the core localizer, run via ONNX Runtime (torch-free, lean).
+    # Kept a core dep so a default install gets the real detector, not the weaker classical
+    # fallback. The Reader still falls back gracefully if it's somehow unavailable.
+    "onnxruntime>=1.16",
+]
 
 [project.optional-dependencies]
 # GUI experiment tools (tools/paint_l.py manual finder-repair editor). Not needed
 # by the reader. Install: pip install -e ".[tools]"
 tools = ["pillow>=10"]
-# Learned YOLO detector — runtime INFERENCE only (lean; ONNX Runtime has a C API).
-# The Reader auto-falls back to the classical proposer if the model/onnxruntime is absent.
-yolo = ["onnxruntime>=1.16"]
+# Back-compat alias: the detector runtime is now a core dependency, so [yolo] is a no-op.
+yolo = []
 # Training/exporting the detector (dev-time only; heavy). Not a runtime dependency.
 yolo-train = ["ultralytics>=8.3"]
 

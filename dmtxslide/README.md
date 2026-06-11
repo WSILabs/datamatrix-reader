@@ -51,17 +51,24 @@ image ─▶ zxing raw decode ────────────────�
 
 ## Install
 
-```bash
-# from source (this repo); [yolo] pulls onnxruntime for the learned detector
-pip install -e ".[yolo]"
+The learned detector ships with the package and its runtime (onnxruntime) is a core
+dependency, so a plain install gives you the full reader — no extras required.
 
-# or straight from git
-pip install "datamatrix-reader[yolo] @ git+https://github.com/WSILabs/datamatrix-reader"
+```bash
+# pip — from source, or straight from git
+pip install -e .
+pip install "datamatrix-reader @ git+https://github.com/WSILabs/datamatrix-reader"
+
+# uv — drop-in, much faster; same package and pyproject, nothing special needed
+uv pip install -e .
+
+# conda / anaconda — make the env, then pip-install into it (the standard pattern)
+conda create -n dmr python=3.11 && conda activate dmr && pip install -e .
 ```
 
-Core deps (numpy, opencv-python-headless, zxing-cpp) install automatically. Extras:
-`[yolo]` = onnxruntime (runtime detector), `[yolo-train]` = ultralytics (training/export,
-dev only), `[tools]` = pillow (GUI helper tools).
+Core deps (numpy, opencv-python-headless, zxing-cpp, onnxruntime) install automatically.
+Extras: `[yolo-train]` = ultralytics (detector training/export, dev only); `[tools]` =
+pillow (GUI helper tools). (`[yolo]` is kept as a no-op alias — the detector is now core.)
 
 ## Usage
 
@@ -134,7 +141,7 @@ tests/            PHI-free unit tests
 ## Validation
 
 ```bash
-pip install -e ".[yolo]"
+pip install -e .
 python -m pytest -q                       # unit tests
 python -m tools.validate_full             # read() over the real WSI corpus (correctness + timing)
 python -m tools.validate_read_all         # read_all() multi-code coverage

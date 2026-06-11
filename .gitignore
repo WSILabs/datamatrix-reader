@@ -12,13 +12,6 @@ dist/
 venv/
 env/
 
-# Compiled cffi shim (built per-platform via `python -m dmtxslide._build_dmtx`)
-*.so
-*.o
-*.dylib
-# generated cffi C source
-**/_dmtx.c
-
 # Benchmark run outputs (regenerated; baselines diffed via bench.report)
 runs/
 
@@ -26,28 +19,23 @@ runs/
 *.tar.gz
 
 # Large public datasets (multi-GB; not for version control)
-dmtxslide/corpus/public/
 corpus/public/
 
 # BarBeR-derived images (regenerable via tools/import_barber.py); keep labels.csv
-dmtxslide/corpus/barber/images/
 corpus/barber/images/
 
 # Domain reference images (web/marketing; used to calibrate synth, not tracked)
-dmtxslide/corpus/pathology_samples/
 corpus/pathology_samples/
 
 # Real Grundium WSI slide labels — PHI (filenames contain accession numbers). NEVER commit.
-dmtxslide/corpus/wsi_labels/
 corpus/wsi_labels/
 
 # No-barcode labels moved aside by tools/label_gt.py (PHI). NEVER commit.
-dmtxslide/corpus/wsi_labels_removed/
 corpus/wsi_labels_removed/
 
 # Raw YOLO training weights + the pretrained base (heavy, intermediate; regenerable via
 # tools/train_yolo.py). The SHIPPED detector is the exported ONNX under
-# src/dmtxslide/models/, which IS committed (small; works out-of-the-box on clone).
+# src/datamatrix_reader/models/, which IS committed (small; works out-of-the-box on clone).
 *.pt
 
 # macOS
@@ -55,7 +43,6 @@ corpus/wsi_labels_removed/
 
 # Dynamsoft trial license key — never commit
 .dynamsoft_license
-dmtxslide/.dynamsoft_license
 
 # Commercial SDK drops (benchmark-only, never commit)
 dynamsoft-barcode-reader-cpp-*.zip

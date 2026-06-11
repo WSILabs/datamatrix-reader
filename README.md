@@ -6,10 +6,11 @@
 ![Detector](https://img.shields.io/badge/detector-YOLOv8%20%C2%B7%20ONNX-9cf?style=flat-square)
 [![Tests](https://github.com/WSILabs/datamatrix-reader/actions/workflows/tests.yml/badge.svg)](https://github.com/WSILabs/datamatrix-reader/actions/workflows/tests.yml)
 
-An **adaptive, source-agnostic DataMatrix reader** for pathology slide labels —
-built on **zxing-cpp**, hardened for the real, degraded codes that whole-slide
-scanners (e.g. Grundium) actually capture: faint or over-inked print, glare,
-half-printed timing rows, and chipped finder patterns.
+An **adaptive, source-agnostic DataMatrix reader** designed and tested on pathology slide labels — built on **zxing-cpp**, and optimized for the typical datamatrix on a pathology slide imaged using a whole slide scanner. This library has been tested against real clinical slides against libdmtx, unassisted zxing.cpp, and the commerical library dyna???, with the following results:
+
+<add actual numbers here>
+
+Note that this library is optimized for typical WSI-imaged slide labels, i.e., well and evenly-lit images, approximately X x Y sized images, minimal rotation (< Z degrees), and reasonably-sized mdoules (> U pxiels). It has been hardened for the real codes that whole-slide scanners actually capture: faint or over-inked print, horizontal line printing defects, glare, and especially the defects in the the finder ("L") and timer patterns with which zxing struggles. This library is not optimized for oblique, heavily skewed, heavily obscured, or poorly illuminated barcodes.
 
 It does two jobs:
 

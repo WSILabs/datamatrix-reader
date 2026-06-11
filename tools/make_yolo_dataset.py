@@ -42,7 +42,7 @@ def _palette(rng):
 
 def _distractor(rng, sub, ink):
     """A BGR tile that is NOT a DataMatrix — teaches the detector to reject look-alikes:
-    QR / Aztec codes (other dense square 2D grids) and a perforated cassette mesh.
+    QR / Aztec codes (other dense square 2D grids) and a perforated mesh.
 
     Colorized with the SAME (sub, ink) palette the positives use, so color carries no
     information about DataMatrix-vs-not — the model must learn the structural difference,
@@ -60,7 +60,7 @@ def _distractor(rng, sub, ink):
         t = cv2.resize(a, None, fx=s, fy=s, interpolation=cv2.INTER_NEAREST)
         tn = t.astype(np.float32)[..., None] / 255.0          # 1=light, 0=dark
         return ((tn * subf + (1 - tn) * inkf) * 255).clip(0, 255).astype(np.uint8)
-    # perforated mesh: a regular grid of holes (ink) on the substrate stock (cassette well)
+    # perforated mesh: a regular grid of holes (ink) on the substrate stock
     cell = rng.randint(7, 14)
     n = rng.randint(14, 28)
     t = np.full((n * cell, n * cell, 3), sub, np.uint8)

@@ -4,7 +4,7 @@
 ONNX Runtime has a C API for the eventual port). `detect()` returns code boxes in native
 pixel coordinates, confidence-desc. The model is trained on synthetic scenes
 (tools/make_yolo_dataset + tools/train_yolo) to find DataMatrix codes and REJECT QR /
-Aztec / cassette-mesh look-alikes (negatives in the training set).
+Aztec / mesh look-alikes (negatives in the training set).
 
 `format_gate()` reads a tight crop with zxing across the 2D formats: a readable code
 short-circuits the expensive repair, and a QR/Aztec is flagged so we don't waste the

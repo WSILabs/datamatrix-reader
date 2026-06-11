@@ -1,7 +1,6 @@
 """Head-to-head of the two trained detectors (dm_neg = neutral palette/distractors,
 dm_real = realistic dark-gray palette + colorized distractors) on the data that matters:
-real WSI residual codes, a synthetic look-alike rejection battery, and the real cassette
-mesh photos. Synthetic mAP can't separate them; this can.
+real WSI residual codes, a synthetic look-alike rejection battery, and the real mesh photos. Synthetic mAP can't separate them; this can.
 
     .venv/bin/python -m tools.compare_yolo
 """
@@ -77,7 +76,7 @@ def main():
         "QR (want reject)": _canvas(_code(zxingcpp.BarcodeFormat.QRCode)),
         "Aztec (want reject)": _canvas(_code(zxingcpp.BarcodeFormat.Aztec)),
     }
-    cassette = ["22106_angle_EAI-0302-10A.jpg",
+    mesh = ["22106_angle_EAI-0302-10A.jpg",
                 "csm_IP_C_IP_S_Slides_1_16_a517685468.jpg.webp"]
 
     for name, path in MODELS.items():
@@ -106,12 +105,12 @@ def main():
             n = len(r.boxes)
             cf = [round(float(c), 2) for c in (r.boxes.conf.cpu().numpy() if n else [])]
             print(f"  {label:28} -> {'DETECT' if n else 'reject':6} ({n} box, conf={cf})")
-        # real cassette mesh photos
-        for c in cassette:
+        # real mesh photos
+        for c in mesh:
             r = m.predict(_load("corpus/pathology_samples/" + c), imgsz=640, conf=0.30, device="mps", verbose=False)[0]
             n = len(r.boxes)
             cf = [round(float(x), 2) for x in (r.boxes.conf.cpu().numpy() if n else [])]
-            print(f"  cassette {c[:30]:30} -> {n} box conf={cf}")
+            print(f"  mesh {c[:30]:30} -> {n} box conf={cf}")
 
 
 if __name__ == "__main__":

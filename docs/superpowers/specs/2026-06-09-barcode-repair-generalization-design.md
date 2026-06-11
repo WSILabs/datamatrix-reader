@@ -173,5 +173,5 @@ gradient in vs out; keep only if it measurably lifts decode).
 
 - `propose()` localizes off-center / scaled / rotated synthetic codes within tolerance.
 - score-guided register agrees with brute-force on sampled synthetic cases.
-- existing PHI-free broken-border + straight-edge tests in `tests/test_register.py` stay green.
+- existing synthetic broken-border + straight-edge tests in `tests/test_register.py` stay green.
 - `tools/validate_full.py` (WSI 404/404) and the new pathology pseudo-GT harness run clean.

@@ -3,7 +3,7 @@ learns what real (faint / low-contrast) codes look like — no manual boxing. Th
 each label comes from read()'s decoded quad (raw zxing.position / cascade / autoreg), so
 every one of the 404 labels gets a tight ground-truth box for free.
 
-The real IMAGES are PHI and stay local (/tmp dataset, gitignored); only the trained
+The real IMAGES stay local (/tmp dataset, gitignored); only the trained
 detection weights ship — and a detector learns "a code is here", never the payload.
 
     .venv/bin/python -m tools.add_real_to_dataset

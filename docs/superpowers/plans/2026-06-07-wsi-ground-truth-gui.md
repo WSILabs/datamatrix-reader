@@ -567,7 +567,7 @@ git commit -m "feat(label_gt): Tkinter labeling GUI + CLI"
 Append under the existing wsi_labels block in `.gitignore`:
 
 ```
-# No-barcode labels moved aside by tools/label_gt.py (PHI). NEVER commit.
+# No-barcode labels moved aside by tools/label_gt.py — kept local.
 datamatrix_reader/corpus/wsi_labels_removed/
 corpus/wsi_labels_removed/
 ```
@@ -581,7 +581,7 @@ Expected: `check-ignore` echoes the path; `git status` shows only the modified `
 
 ```bash
 git add .gitignore
-git commit -m "chore: gitignore wsi_labels_removed (PHI)"
+git commit -m "chore: gitignore wsi_labels_removed (kept local)"
 ```
 
 - [ ] **Step 4: Run for real, then score**

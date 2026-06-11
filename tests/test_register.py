@@ -1,4 +1,4 @@
-"""Synthetic (PHI-free) tests for the finder-registration recovery.
+"""Synthetic tests for the finder-registration recovery.
 
 Builds a known square DataMatrix, then verifies decode_auto recovers it even when the
 finder/timing border is erased (the core capability) and when a fake straight edge (a

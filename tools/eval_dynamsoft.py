@@ -103,7 +103,7 @@ def main():
           f"{len(dyn_gets_zx_miss)}  -> combined ceiling "
           f"{zx_ok + len(dyn_gets_zx_miss)}/{n} = {(zx_ok + len(dyn_gets_zx_miss))/n:.3f}")
 
-    # does dynamsoft crack the broken-finder ones? (PHI-safe: counts only)
+    # does dynamsoft crack the broken-finder ones? (counts only)
     bf = [m for m in zx_misses if "broken_finder" in defects.get(m, [])]
     bf_got = [m for m in bf if m in dyn_gets_zx_miss]
     faint = [m for m in zx_misses if "faint" in defects.get(m, [])]

@@ -27,10 +27,10 @@ corpus/barber/images/
 # Domain reference images (web/marketing; used to calibrate synth, not tracked)
 corpus/pathology_samples/
 
-# Real Grundium WSI slide labels — PHI (filenames contain accession numbers). NEVER commit.
+# Real Grundium WSI slide labels — real clinical captures; kept local, not for version control.
 corpus/wsi_labels/
 
-# No-barcode labels moved aside by tools/label_gt.py (PHI). NEVER commit.
+# No-barcode labels moved aside by tools/label_gt.py — also kept local.
 corpus/wsi_labels_removed/
 
 # Raw YOLO training weights + the pretrained base (heavy, intermediate; regenerable via

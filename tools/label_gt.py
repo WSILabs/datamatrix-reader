@@ -93,7 +93,7 @@ def autofill(image_dir: Path, labels: dict[str, str], budget: int,
     into labels (+ labels.csv), return {'added': int, 'queue': [(Path, [str])]}
     for the no-read/disagreement images. The decode pass is the slow part
     (~hundreds of ms/image); pass progress=True to print a live counter
-    (counts only, no payloads/filenames -> PHI-safe)."""
+    (counts only, no payloads/filenames)."""
     if folds is None:
         from tools.compare_backends import FOLDS as folds
     csv_path = image_dir / "labels.csv"

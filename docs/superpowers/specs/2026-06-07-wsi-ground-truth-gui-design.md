@@ -7,7 +7,7 @@
 ## Problem
 
 The real Grundium WSI labels live in `corpus/wsi_labels/` (407 PNGs, 1200×848,
-gitignored PHI — filenames contain accession numbers). They have **no ground
+gitignored — real clinical captures, kept local). They have **no ground
 truth**, so the decoder comparison can only count decode-*hits*, not *correctness*.
 We want a `labels.csv` (`file,payload`) so `compare_backends --corpus` can produce
 real correctness scores — the proper, ground-truthed version of the zxing-vs-libdmtx
@@ -35,7 +35,7 @@ the user only for the gaps**.
 ## Data model
 
 `corpus/wsi_labels/` stays **flat** (no `images/` subdir — we don't reshuffle 407
-PHI files). Artifacts written alongside the PNGs:
+local-only files). Artifacts written alongside the PNGs:
 
 - **`corpus/wsi_labels/labels.csv`** — canonical ground truth, `file,payload`
   (same schema `compare_backends` and `bench/harness` already read). One row per
@@ -70,7 +70,7 @@ skipped. Auto-fill only adds rows for images that are currently undecided.
 
 ## Phase B — GUI (Tkinter)
 
-Stdlib `tkinter` only (zero new deps, fully offline — required for PHI). One window,
+Stdlib `tkinter` only (zero new deps, fully offline — keeps the data local). One window,
 one image at a time, iterating the queue (no-read + disagreement images).
 
 ```
@@ -158,6 +158,6 @@ the queue is non-empty.
 - **Sole-reader auto-fill** can bake in a single decoder's misread. Accepted;
   mitigated by being able to diff auto-filled vs hand-entered rows later if a
   spot-check is wanted.
-- **PHI:** `labels.csv` contains accession numbers and `wsi_labels_removed/` holds
+- **Local-only data:** `labels.csv` contains accession numbers and `wsi_labels_removed/` holds
   label images. Both must be gitignored. `corpus/wsi_labels/` already is; add
   `corpus/wsi_labels_removed/` (and the dual-path variant) to `.gitignore`.

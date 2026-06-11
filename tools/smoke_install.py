@@ -1,6 +1,6 @@
 """Install smoke test: confirm a BUILT/INSTALLED copy ships the YOLO model, loads it, and
 decodes — i.e. that package-data is wired correctly and the Reader isn't silently falling back
-to the classical proposer. Uses a synthetic (PHI-free) code, so it's safe to run anywhere.
+to the classical proposer. Uses a synthetic code, so it's safe to run anywhere.
 
 Run it against a CLEAN install to actually exercise packaging (not the editable dev tree):
 

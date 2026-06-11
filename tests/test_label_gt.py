@@ -59,7 +59,7 @@ def test_delete_moves_file_and_drops_label(tmp_path):
 from tools.label_gt import autofill, parse_accession, is_valid_payload
 
 def test_parse_accession_extracts_accession_block_drops_stain():
-    # fabricated accessions (no real PHI); barcode = accession+block, filename
+    # fabricated accessions (synthetic); barcode = accession+block, filename
     # adds a trailing stain (" HE") the pattern must drop
     assert parse_accession("wsi_logged__scan_42_2-S-25-12345 A8-1 HE_label01.png") == "2-S-25-12345 A8-1"
     assert parse_accession("x__scan_7_3-SH-24-00099 9A-1_label02.png") == "3-SH-24-00099 9A-1"
@@ -103,4 +103,4 @@ def test_autofill_silent_by_default_progress_prints_counts(tmp_path, capsys):
     autofill(tmp_path, {}, budget=50, folds=folds, progress=True)
     out = capsys.readouterr().out
     assert "2/2" in out and "auto 2" in out                  # counter shown
-    assert "one.png" not in out and "two.png" not in out     # no filenames (PHI)
+    assert "one.png" not in out and "two.png" not in out     # no filenames in output

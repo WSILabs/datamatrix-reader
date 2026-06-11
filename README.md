@@ -10,7 +10,7 @@ An **adaptive, source-agnostic DataMatrix reader** designed and tested on pathol
 
 | decoder | decode rate |
 |---|---:|
-| **this library** | **100%** |
+| **datamatrix-reader** | **100%** |
 | Dynamsoft (commercial) | 98% |
 | zxing-cpp (raw) | 87% |
 | libdmtx (raw) | 72% |
@@ -157,7 +157,7 @@ src/datamatrix_reader/
 tools/            validation harnesses (validate_full / read_all / synth / pathology),
                   viz_search (animate the registration search), YOLO train/export,
                   smoke_install (verify a built wheel ships + loads the model)
-tests/            PHI-free unit tests
+tests/            synthetic unit tests
 ```
 
 ## Validation
@@ -170,5 +170,5 @@ python -m tools.validate_read_all         # read_all() multi-code coverage
 python -m tools.validate_synth            # synthetic localization + decode rate
 ```
 
-The real WSI corpus lives outside the package (it's PHI and is not committed); only code and
-the detector *weights* ship. Validated: **WSI 404/404, WRONG = 0**, p50 ~4 ms.
+The real WSI corpus lives outside the package (real clinical captures, kept local — not
+committed); only code and the detector *weights* ship. Validated: **WSI 404/404, WRONG = 0**, p50 ~4 ms.

@@ -76,15 +76,15 @@ The learned detector ships with the package and its runtime (onnxruntime) is a c
 dependency, so a plain install gives you the full reader — no extras required.
 
 ```bash
-# pip — from source, or straight from git
-pip install -e .
+# pip — install straight from git, no clone needed
 pip install "datamatrix-reader @ git+https://github.com/WSILabs/datamatrix-reader"
 
-# uv — drop-in, much faster; same package and pyproject, nothing special needed
-uv pip install -e .
+# uv
+uv pip install "datamatrix-reader @ git+https://github.com/WSILabs/datamatrix-reader"
 
 # conda / anaconda — make the env, then pip-install into it (the standard pattern)
-conda create -n dmr python=3.11 && conda activate dmr && pip install -e .
+conda create -n dmr python=3.11 && conda activate dmr
+pip install "datamatrix-reader @ git+https://github.com/WSILabs/datamatrix-reader"
 ```
 
 Core deps (numpy, opencv-python-headless, zxing-cpp, onnxruntime) install automatically.

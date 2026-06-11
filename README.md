@@ -4,9 +4,7 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)
 ![Decoder](https://img.shields.io/badge/decoder-zxing--cpp-orange?style=flat-square)
 ![Detector](https://img.shields.io/badge/detector-YOLOv8%20%C2%B7%20ONNX-9cf?style=flat-square)
-![WSI corpus](https://img.shields.io/badge/WSI%20corpus-404%2F404%20%C2%B7%20WRONG%200-brightgreen?style=flat-square)
 ![Tests](https://img.shields.io/badge/tests-57%20passing-brightgreen?style=flat-square)
-![ECC](https://img.shields.io/badge/ECC--validated-never%20mis--reads-blueviolet?style=flat-square)
 
 An **adaptive, source-agnostic DataMatrix reader** for pathology slide labels —
 built on **zxing-cpp**, hardened for the real, degraded codes that whole-slide

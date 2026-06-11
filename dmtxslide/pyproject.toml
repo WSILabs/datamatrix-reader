@@ -5,8 +5,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "datamatrix-reader"
 version = "0.0.1"
-description = "Source-agnostic DataMatrix reader for slide labels (zxing-cpp core)"
+description = "Robust DataMatrix reader for pathology slide labels (zxing-cpp core + YOLO detector + finder-pattern repair)"
 requires-python = ">=3.10"
+keywords = [
+    "datamatrix", "barcode", "barcode-reader", "2d-barcode", "decoder", "zxing",
+    "pathology", "digital-pathology", "whole-slide-imaging", "wsi", "slide-labels",
+    "computer-vision", "opencv", "yolo", "onnx", "medical-imaging",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Healthcare Industry",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
 dependencies = [
     "numpy>=1.24",
     "opencv-python-headless>=4.8",

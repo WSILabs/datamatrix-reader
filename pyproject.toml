@@ -41,6 +41,8 @@ tools = ["pillow>=10"]
 yolo = []
 # Training/exporting the detector (dev-time only; heavy). Not a runtime dependency.
 yolo-train = ["ultralytics>=8.3"]
+# Test runner (CI + local). Install: pip install -e ".[test]"
+test = ["pytest>=7"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

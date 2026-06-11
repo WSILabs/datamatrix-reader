@@ -17,7 +17,7 @@ An **adaptive, source-agnostic DataMatrix reader** designed and tested on pathol
 
 The decisive gap is the **broken-finder / damaged-timing tail**: this library reconstructs the canonical finder ("L") and timing pattern from the intact data modules and hands the clean symbol to zxing's Reed–Solomon stage — reading codes that even the commercial decoder misses, and never guessing a payload (every decode is ECC-validated).
 
-Note that this library is optimized for typical WSI-imaged slide labels: well- and evenly-lit captures, roughly **1200×850 px** label crops, near-cardinal orientation (any 90° rotation; in-plane skew within ~±15°), and reasonably-sized modules (**≳5 px each** — ~9 px/module on the WSI corpus). It has been hardened for the real defects whole-slide scanners actually encounter: faint or over-inked print, horizontal line-printing defects, glare, and especially the damaged finder ("L") and timing patterns that zxing alone struggles with. It is not optimized for oblique, heavily skewed or perspective-warped, heavily obscured, or poorly-lit barcodes.
+Note that this library is optimized for typical WSI-imaged slide labels: well- and evenly-lit captures, roughly **1200×850 px** label crops, near-cardinal orientation (any 90° rotation; in-plane skew within ~±15°), and reasonably-sized modules (**≳5 px each** — ~9 px/module on the WSI corpus). It has been hardened for the real defects whole-slide scanners actually encounter: faint or over-inked print, horizontal line-printing defects, glare, and especially the damaged finder ("L") and timing patterns that zxing alone struggles with. It is not optimized for oblique, heavily skewed or perspective-warped, heavily obscured, or poorly-lit barcodes. It also prioritizes **recovery over throughput** — built for single-shot or batch label decoding, not real-time / high-fps applications.
 
 It does two jobs:
 
@@ -133,9 +133,10 @@ accession = res.payload if (res.ok and ok(res.payload)) else None
 - **Robustness from coverage, not tuned constants.** A single pipeline bakes in
   assumptions some unseen input breaks. The ladder spans the variation instead, and every
   rung exits only on a *validated* decode — so there's little to overfit.
-- **Latency bounded by construction.** The fast path is raw zxing; the cascade and repair
-  run only on a miss. On the validated WSI corpus, p50 ≈ 4 ms and the worst broken-border
-  label finishes in ~0.2 s.
+- **Recovery over speed.** The clean-code fast path is raw zxing (p50 ≈ 4 ms), but recovery
+  runs without a per-call deadline — the cascade and repair will spend real effort to read a
+  degraded code (the worst broken-border label takes ~0.2 s on the WSI corpus). This is a
+  single-shot / batch decoder, not a real-time one.
 - **Synthetic for generalization, real for confirmation.** Tune against parametric
   synthetic scenes (`synth.py`) that bracket the real failure axes (scale, rotation, ink
   gain/dropout, clutter); treat the real corpus as held-out confirmation, never the tuning

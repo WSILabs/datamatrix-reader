@@ -51,3 +51,8 @@ where = ["src"]
 # copy has no model and the Reader silently falls back to the classical proposer.
 [tool.setuptools.package-data]
 datamatrix_reader = ["models/*.onnx"]
+
+[tool.pytest.ini_options]
+# Some tests import the repo-root tools/ and bench/ packages; put the root on sys.path so
+# the `pytest` console script (how CI runs it) resolves them, not just `python -m pytest`.
+pythonpath = ["."]

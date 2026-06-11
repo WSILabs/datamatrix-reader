@@ -1,144 +1,145 @@
 # datamatrix-reader
 
-An **adaptive, source-agnostic DataMatrix reader** built on top of libdmtx,
-aimed at the slide-label domain but designed to handle arbitrary printers,
-symbol sizes, and label colours without per-deployment retuning.
+An **adaptive, source-agnostic DataMatrix reader** for pathology slide labels —
+built on **zxing-cpp**, hardened for the real, degraded codes that whole-slide
+scanners (e.g. Grundium) actually capture: faint or over-inked print, glare,
+half-printed timing rows, and chipped finder patterns.
 
-libdmtx's decode core (grid sampling + Reed–Solomon) is sound. Its weaknesses
-are upstream — region search robustness and speed — so this project adds an
-adaptive front-end and a bounded decode cascade *around* libdmtx and does not
-modify its internals. (libdmtx stays a git submodule under `third_party/` so
-patching it remains possible, but you almost certainly won't need to.)
+It does two jobs:
 
-## The two design constraints
+1. **Single-code decode** — read the one DataMatrix on a slide label (the common case).
+2. **DataMatrix engine** — inside a larger label reader: return *every* DataMatrix
+   (with location), surface QR/Aztec as tagged hints, and stay in its lane (no OCR /
+   1D / layout — that's the host's job).
 
-**1. Robustness comes from coverage, not tuned constants.** A single pipeline
-bakes in assumptions that some unseen input will break. Instead we run a
-*cascade* of self-calibrating strategies and return on the first **validated**
-decode. Generalisation = how well the ladder's rungs span the variation; there
-are almost no free constants to overfit, because every rung keys its parameters
-to the *measured* module pitch, and the exit is gated on a valid decode.
+Every decode is **ECC200/Reed–Solomon validated**, so a bad fit fails closed — the
+reader never mis-reads.
 
-**2. Latency is bounded by construction.** The reason stock libdmtx can take
-seconds is its region search over a full frame, worst on misses. We:
-  - **localize once** (cheap, decoder-free, on a downscaled gradient map) and
-    hand the cascade a small rectified ROI, so libdmtx's own search is trivial;
-  - give every libdmtx call a **per-rung timeout** (tens of ms);
-  - enforce a **global deadline** in the orchestrator.
-Clean codes exit in rung 0 in a few ms; the hard tail walks the ladder up to
-the budget and then stops. Verified: a 1200×1200 noise frame with a 40 ms
-timeout returns in 41 ms.
+## How it works
 
-## Pipeline
+A miss-driven ladder: cheap things first, expensive recovery only when needed.
 
 ```
-image ──▶ best_contrast_channel ──▶ localize (once) ──▶ for each candidate:
-                                                          run_cascade under
-                                                          a global deadline
-                                                              │
-   adapt.py            localize.py                        cascade.py
-   (colour → most-     (gradient blob →                   (raw→otsu→adaptive→
-    separable channel)  rectified ROI +                    scale→close→open→
-                        quiet-zone pad)                     unsharp; per-rung
-                                                            timeout; valid-
-                                                            decode early exit)
-                                                              │
-                                                          binding.py
-                                                          (staged libdmtx:
-                                                           find ≠ decode,
-                                                           + region geometry
-                                                           + px/module)
+image ─▶ zxing raw decode ──────────────────────────────── hit ▶ done  (p50 ~4 ms)
+            │ miss
+            ▼
+         YOLO detector localizes the code(s) ─▶ format-gate (zxing on the tight crop):
+            │                                     DataMatrix ▶ done · QR/Aztec ▶ tagged hint
+            │ undecoded / faint
+            ▼
+         ink-thickening cascade (full frame): CLAHE+upscale ▶ Otsu ▶ progressive
+            │                                   erosion (grow ink) ▶ Sauvola  ─▶ hit ▶ done
+            │ broken finder/timing
+            ▼
+         registration repair: localize ▶ sample the module grid ▶ REPAINT the canonical
+            finder/timing ▶ hand the clean symbol to zxing  ─▶ hit ▶ done
 ```
 
-## Why measure with synthetic data
+- **zxing-first.** On real captures a modern decoder beats hand-tuned preprocessing;
+  preprocessing only runs on a miss, so the fast path stays a few milliseconds.
+- **Ink-thickening cascade** (`preprocess.py`) recovers faint / poorly-printed codes by
+  progressively laying down ink at escalating strength. The costly 4×-upscale stages are
+  gated on measured pixels-per-module, so well-sampled codes skip them.
+- **Registration repair** (`register.py`) handles broken *borders*: when the finder L or
+  timing is damaged but the data modules survive, it reconstructs the module grid, repaints
+  the canonical finder/timing, and lets zxing do the ECC — recovering codes a decoder alone
+  can't, without ever guessing a payload.
+- **Learned detector** (`detect.py`): a YOLOv8-nano ONNX model (run via onnxruntime, no
+  torch at inference) localizes DataMatrix and rejects look-alikes (QR/Aztec/cassette mesh).
+  It **ships in the wheel**; if it or onnxruntime is absent, the reader falls back to a
+  classical texture/gradient proposer (`locate.py`).
 
-A real corpus from one lab is too specific to optimise against — tuning to it
-just overfits to one printer. So the **primary optimisation surface is
-synthetic** (`synth.py`): render known payloads with libdmtx's own encoder,
-then degrade them parametrically across the axes you want to generalise over
-(module size, blur, ink gain/dropout, label colour, rotation, noise). That
-gives unlimited perfectly-labelled samples from sources you don't own. Your
-real corpus (`corpus/images` + `labels.csv`) is run the same way, as a
-*confirmation* that the degradation model is realistic — never the tuning
-target.
+## Install
 
-Judge the reader by its **worst stratum**, not its mean (`bench/harness.py`
-reports per-axis read rate and the single worst cell). A source-agnostic reader
-is only as good as its weakest substrate. Adding a cascade rung is justified
-only when it lifts a weak stratum without regressing others
-(`bench/report.py` diffs two runs and flags regressions).
+```bash
+# from source (this repo); [yolo] pulls onnxruntime for the learned detector
+pip install -e ".[yolo]"
+
+# or straight from git
+pip install "datamatrix-reader[yolo] @ git+https://github.com/WSILabs/datamatrix-reader"
+```
+
+Core deps (numpy, opencv-python-headless, zxing-cpp) install automatically. Extras:
+`[yolo]` = onnxruntime (runtime detector), `[yolo-train]` = ultralytics (training/export,
+dev only), `[tools]` = pillow (GUI helper tools).
+
+## Usage
+
+```python
+import cv2
+from datamatrix_reader.reader import Reader
+
+reader = Reader()
+
+# 1) single code — the fast path
+res = reader.read(cv2.imread("label.png"))      # BGR or grayscale
+if res.ok:
+    print(res.payload, res.stage, res.box)      # bytes, how it was found, (x0,y0,x1,y1)
+
+# 2) every 2D code on a mixed label
+out = reader.read_all(cv2.imread("label.png"))
+for c in out.datamatrix:                        # each: payload, quad (4x2), box, format, stage
+    print("DM", c.payload, c.box)
+for c in out.other_2d:                          # QR/Aztec as routable hints (payload may be None)
+    print("hint", c.format, c.box)
+```
+
+- `read()` → `ReadResult(payload, stage, elapsed_ms, quad)` with `.ok` and `.box`
+  (axis-aligned bbox derived from the quad). `stage` is how it decoded:
+  `raw` · `gate` · `clahe` · `thick_u{f}_i{it}` · `sauv` · `autoreg`.
+- `read_all()` → `ReadAllResult(datamatrix, other_2d, elapsed_ms)` with `.payloads`.
+  Each entry is a `Code(payload, quad, format, stage)` with `.box`. Quads/boxes are in
+  **original-image coordinates**.
+
+**Validating payloads** is an application concern — the reader returns whatever decodes.
+`validate.py` offers helpers you apply yourself:
+
+```python
+from datamatrix_reader.validate import RegexValidator
+ok = RegexValidator(r'^[A-Z]\d{2}-\d{5}-[A-Z]\d$')
+accession = res.payload if (res.ok and ok(res.payload)) else None
+```
+
+## Design principles
+
+- **Robustness from coverage, not tuned constants.** A single pipeline bakes in
+  assumptions some unseen input breaks. The ladder spans the variation instead, and every
+  rung exits only on a *validated* decode — so there's little to overfit.
+- **Latency bounded by construction.** The fast path is raw zxing; the cascade and repair
+  run only on a miss. On the validated WSI corpus, p50 ≈ 4 ms and the worst broken-border
+  label finishes in ~0.2 s.
+- **Synthetic for generalization, real for confirmation.** Tune against parametric
+  synthetic scenes (`synth.py`) that bracket the real failure axes (scale, rotation, ink
+  gain/dropout, clutter); treat the real corpus as held-out confirmation, never the tuning
+  target. Judge by the *worst* stratum, not the mean.
 
 ## Layout
 
 ```
 src/datamatrix_reader/
-  _build_dmtx.py   cffi build + C shim (staged decode, timeout, encode)
-  binding.py       typed wrapper → StageResult (found/decoded/bbox/px-module)
-  adapt.py         contrast-channel selection, scale normalisation
-  localize.py      decoder-free region finding + rectification
-  validate.py      payload validators (gate the early exit)
-  cascade.py       self-calibrating rung ladder + bounded orchestration
-  reader.py        public API: Reader.read(image, budget_ms)
-bench/
-  harness.py       stratified read/correct rate, latency p50/p95, found-vs-decoded
-  report.py        diff two runs, surface regressed strata
-third_party/libdmtx/   (git submodule — keeps patching on the table)
-corpus/images/, corpus/labels.csv   your real captures + ground truth
-experiments/     config files, one per cascade/param variant
+  reader.py       public API: Reader.read / read_all -> ReadResult / ReadAllResult
+  register.py     unified pipeline (_collect) + registration repair + region detectors
+  preprocess.py   ink-thickening cascade stages (px/module-gated upscale)
+  detect.py       YOLO detector (onnxruntime) + format gate; classical fallback
+  locate.py       decoder-free region proposer (used when the model is absent)
+  synth.py        parametric synthetic label scenes for generalization testing
+  validate.py     optional payload validators (application-layer)
+  models/dm_yolo.onnx   the shipped detector weights
+tools/            validation harnesses (validate_full / read_all / synth / pathology),
+                  viz_search (animate the registration search), YOLO train/export,
+                  smoke_install (verify a built wheel ships + loads the model)
+tests/            PHI-free unit tests
 ```
 
-## Build & run
+## Validation
 
 ```bash
-# native deps: apt install libdmtx-dev   (or: brew install libdmtx)
-pip install -e .
-python -m datamatrix_reader._build_dmtx           # compile the shim against libdmtx
-
-# baseline on synthetic strata
-python -m bench.harness --synth --per-cell 2 --budget 250 --out runs/baseline.json
-# after a change
-python -m bench.harness --synth --per-cell 2 --budget 250 --out runs/variant.json
-python -m bench.report runs/baseline.json runs/variant.json
-
-# confirmation on your real slides
-python -m bench.harness --corpus corpus --budget 250 --out runs/real.json
+pip install -e ".[yolo]"
+python -m pytest -q                       # unit tests
+python -m tools.validate_full             # read() over the real WSI corpus (correctness + timing)
+python -m tools.validate_read_all         # read_all() multi-code coverage
+python -m tools.validate_synth            # synthetic localization + decode rate
 ```
 
-```python
-from datamatrix_reader.reader import Reader
-from datamatrix_reader.validate import RegexValidator
-
-reader = Reader(validator=RegexValidator(r'^S\d{2}-\d{5}-A\d$'))
-res = reader.read(image_bgr, budget_ms=250)   # res.payload, res.rung, res.elapsed_ms
-```
-
-## Handoff to Claude Code — good next tasks
-
-The scaffold is the measure→tune frame; the work is filling it in against the
-worst strata:
-
-1. **Capture-geometry / scale rungs.** The baseline shows failure concentrated
-   at low px/module. Improve `t_scale_adaptive` / add a super-resolution rung,
-   and separately confirm how many px/module your rig actually delivers — some
-   of this is optical, not software.
-2. **Localization recall.** `localize.py` is a first-pass blob finder; measure
-   its hit rate (found-rate in the harness) and harden it (multi-scale, better
-   squareness/timing-pattern scoring) without slowing rung 0.
-3. **Degradation realism.** Calibrate `synth.AXES` against a handful of real
-   captures so the synthetic distribution covers your true failure modes; keep
-   the real corpus as held-out confirmation only.
-4. **Latency tightening.** p95 sits near the budget; profile per rung, prune or
-   reorder rungs, and consider a cheap routing feature only if needed.
-
-Each change is accepted/rejected by `bench/report.py` on the worst-stratum and
-Pareto criteria — not by the mean read rate on any one corpus.
-
-## Verified in this scaffold
-- libdmtx 0.7.7 staged binding (find vs decode split, region geometry, hard
-  timeout) — encode→decode round-trip exact.
-- Per-call timeout honoured (40 ms request → 41 ms return on noise).
-- Full reader decodes a yellow-stock, blurred, ink-gained, rotated, text-
-  crowded synthetic capture in ~15 ms.
-- Stratified harness over 216 synthetic samples: substrate colour flat across
-  white/yellow/pink (channel selection working), failure isolated to low
-  px/module.
+The real WSI corpus lives outside the package (it's PHI and is not committed); only code and
+the detector *weights* ship. Validated: **WSI 404/404, WRONG = 0**, p50 ~4 ms.

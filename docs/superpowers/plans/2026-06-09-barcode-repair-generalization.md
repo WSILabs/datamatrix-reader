@@ -11,17 +11,17 @@
 **Spec:** `docs/superpowers/specs/2026-06-09-barcode-repair-generalization-design.md`
 
 **Reference (read before starting):**
-- `src/dmtxslide/register.py` — current repair core: `_zxing`, `_kernel`, `border_mask`, `render_symbol`, `sample_fast`, `_texture`, `detect_dark_region`, `detect_data_region`, `detect_area`, `l_orientations`, `decode_auto`, `recover`, `ROI_FRAC`, `SIZES=(22,18,20,24)`.
-- `src/dmtxslide/synth.py` — `render(payload)->1px grid`, `degrade(grid,p,rng)`, `DegradeParams`, `crowd_quiet_zone`.
+- `src/datamatrix_reader/register.py` — current repair core: `_zxing`, `_kernel`, `border_mask`, `render_symbol`, `sample_fast`, `_texture`, `detect_dark_region`, `detect_data_region`, `detect_area`, `l_orientations`, `decode_auto`, `recover`, `ROI_FRAC`, `SIZES=(22,18,20,24)`.
+- `src/datamatrix_reader/synth.py` — `render(payload)->1px grid`, `degrade(grid,p,rng)`, `DegradeParams`, `crowd_quiet_zone`.
 - `tests/test_register.py` — `_square_symbol()` helper returns `(payload_bytes, MxM bool dark grid)` for a square-encoding payload; `_canvas(dark, cell, quiet)` renders it.
 
 ---
 
 ## File Structure
 
-- **Create `src/dmtxslide/locate.py`** — `propose(gray) -> list[(cx, cy, size, angle)]`, pyramid texture-blob proposals (position/scale-robust localization). One responsibility: "where might a square code be."
-- **Modify `src/dmtxslide/register.py`** — drop `detect_dark_region` from the decode path; add `score_registration`, `register_candidate` (score-guided + brute-force backstop); rewrite `recover` to `propose -> normalize -> register`. `decode_auto` stays (operates at canonical scale) but its detector union becomes texture+gradient.
-- **Modify `src/dmtxslide/synth.py`** — add `scene(payload, params, rng) -> (bgr_image, truth_dict)` placing a square code anywhere on a label canvas with cardinal rotation+skew and the new confounders (border defects, glass chip, straight edges, text).
+- **Create `src/datamatrix_reader/locate.py`** — `propose(gray) -> list[(cx, cy, size, angle)]`, pyramid texture-blob proposals (position/scale-robust localization). One responsibility: "where might a square code be."
+- **Modify `src/datamatrix_reader/register.py`** — drop `detect_dark_region` from the decode path; add `score_registration`, `register_candidate` (score-guided + brute-force backstop); rewrite `recover` to `propose -> normalize -> register`. `decode_auto` stays (operates at canonical scale) but its detector union becomes texture+gradient.
+- **Modify `src/datamatrix_reader/synth.py`** — add `scene(payload, params, rng) -> (bgr_image, truth_dict)` placing a square code anywhere on a label canvas with cardinal rotation+skew and the new confounders (border defects, glass chip, straight edges, text).
 - **Create `tests/test_locate.py`** — `propose` localizes off-center/scaled/rotated synthetic scenes.
 - **Modify `tests/test_register.py`** — score-guided register agrees with brute-force; keep existing broken-border/edge tests.
 - **Modify `tests/test_synth.py`** — `scene` produces non-degenerate, decodable-when-clean scenes with correct truth.
@@ -36,7 +36,7 @@
 ## Task 1: Synthetic full-label scene generator
 
 **Files:**
-- Modify: `src/dmtxslide/synth.py`
+- Modify: `src/datamatrix_reader/synth.py`
 - Test: `tests/test_synth.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -47,8 +47,8 @@ Add to `tests/test_synth.py`:
 import random
 import numpy as np
 import zxingcpp
-from dmtxslide import synth
-from dmtxslide.register import _zxing
+from datamatrix_reader import synth
+from datamatrix_reader.register import _zxing
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 
@@ -85,9 +85,9 @@ def test_scene_places_code_and_reports_truth():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_synth.py::test_scene_places_code_and_reports_truth -v`
-Expected: FAIL — `AttributeError: module 'dmtxslide.synth' has no attribute 'SceneParams'`.
+Expected: FAIL — `AttributeError: module 'datamatrix_reader.synth' has no attribute 'SceneParams'`.
 
-- [ ] **Step 3: Implement `SceneParams` + `scene` in `src/dmtxslide/synth.py`**
+- [ ] **Step 3: Implement `SceneParams` + `scene` in `src/datamatrix_reader/synth.py`**
 
 Append:
 
@@ -192,7 +192,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/synth.py tests/test_synth.py
+git add src/datamatrix_reader/synth.py tests/test_synth.py
 git commit -m "feat(synth): full-label scene generator (placement, rotation, confounders)"
 ```
 
@@ -201,7 +201,7 @@ git commit -m "feat(synth): full-label scene generator (placement, rotation, con
 ## Task 2: `locate.propose` — pyramid texture-blob proposals
 
 **Files:**
-- Create: `src/dmtxslide/locate.py`
+- Create: `src/datamatrix_reader/locate.py`
 - Test: `tests/test_locate.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -211,8 +211,8 @@ Create `tests/test_locate.py`:
 ```python
 import random
 import numpy as np
-from dmtxslide import synth
-from dmtxslide.locate import propose
+from datamatrix_reader import synth
+from datamatrix_reader.locate import propose
 
 
 def _payload():
@@ -255,9 +255,9 @@ def test_propose_localizes_offcenter_varied_scale():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/python -m pytest tests/test_locate.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'dmtxslide.locate'`.
+Expected: FAIL — `ModuleNotFoundError: No module named 'datamatrix_reader.locate'`.
 
-- [ ] **Step 3: Implement `src/dmtxslide/locate.py`**
+- [ ] **Step 3: Implement `src/datamatrix_reader/locate.py`**
 
 ```python
 """Scale/position-robust localization: propose candidate square DataMatrix regions
@@ -343,7 +343,7 @@ Expected: PASS (≥4/5). If 3/5, widen `PYRAMID_SCALES` or relax `_MIN_FILL` to 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/locate.py tests/test_locate.py
+git add src/datamatrix_reader/locate.py tests/test_locate.py
 git commit -m "feat(locate): pyramid texture-blob proposals (position/scale-robust)"
 ```
 
@@ -352,7 +352,7 @@ git commit -m "feat(locate): pyramid texture-blob proposals (position/scale-robu
 ## Task 3: Drop `dark` from the decode path; add a normalize helper
 
 **Files:**
-- Modify: `src/dmtxslide/register.py:147-174` (`decode_auto`)
+- Modify: `src/datamatrix_reader/register.py:147-174` (`decode_auto`)
 - Test: `tests/test_register.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -363,7 +363,7 @@ Add to `tests/test_register.py`:
 def test_decode_auto_uses_two_detectors():
     # the decode path must no longer call detect_dark_region
     import inspect
-    from dmtxslide import register
+    from datamatrix_reader import register
     src = inspect.getsource(register.decode_auto)
     assert "detect_dark_region" not in src
     assert "detect_area" in src and "detect_data_region" in src
@@ -374,7 +374,7 @@ def test_decode_auto_uses_two_detectors():
 Run: `.venv/bin/python -m pytest tests/test_register.py::test_decode_auto_uses_two_detectors -v`
 Expected: FAIL — `detect_dark_region` still in `decode_auto`.
 
-- [ ] **Step 3: Edit `decode_auto` region list in `src/dmtxslide/register.py`**
+- [ ] **Step 3: Edit `decode_auto` region list in `src/datamatrix_reader/register.py`**
 
 Change the `regions = [...]` line inside `decode_auto` from three detectors to two:
 
@@ -393,7 +393,7 @@ Expected: all PASS (the existing synthetic broken-border/edge tests still decode
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/register.py tests/test_register.py
+git add src/datamatrix_reader/register.py tests/test_register.py
 git commit -m "perf(register): drop dark-ink detector from decode path (ablation: 0 unique)"
 ```
 
@@ -402,7 +402,7 @@ git commit -m "perf(register): drop dark-ink detector from decode path (ablation
 ## Task 4: Rewrite `recover` to propose → normalize → decode (drop the hardcoded ROI)
 
 **Files:**
-- Modify: `src/dmtxslide/register.py` (`recover`, add `_normalize`)
+- Modify: `src/datamatrix_reader/register.py` (`recover`, add `_normalize`)
 - Test: `tests/test_register.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -412,8 +412,8 @@ Add to `tests/test_register.py`:
 ```python
 def test_recover_decodes_offcenter_scene():
     import random
-    from dmtxslide import synth
-    from dmtxslide.register import recover
+    from datamatrix_reader import synth
+    from datamatrix_reader.register import recover
     rng = random.Random(3)
     for t in (b"DMTXSLIDE-RECOVER-TEST", b"ABCDEFGHIJKLMNOPQRSTUVWX"):
         import zxingcpp
@@ -433,7 +433,7 @@ def test_recover_decodes_offcenter_scene():
 Run: `.venv/bin/python -m pytest tests/test_register.py::test_recover_decodes_offcenter_scene -v`
 Expected: FAIL — current `recover` crops the upper-left ROI, misses a lower-right code.
 
-- [ ] **Step 3: Rewrite `recover` and add `_normalize` in `src/dmtxslide/register.py`**
+- [ ] **Step 3: Rewrite `recover` and add `_normalize` in `src/datamatrix_reader/register.py`**
 
 Replace the current `recover` (and `ROI_FRAC`) with:
 
@@ -483,7 +483,7 @@ Expected: `TOTAL correct : 404/404 = 1.000`, `WRONG : 0`. (If any WSI code regre
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/register.py tests/test_register.py
+git add src/datamatrix_reader/register.py tests/test_register.py
 git commit -m "feat(register): recover via propose+normalize (code anywhere, any scale)"
 ```
 
@@ -507,9 +507,9 @@ separately, with the worst stratum surfaced.
 import random
 import numpy as np
 import zxingcpp
-from dmtxslide import synth
-from dmtxslide.locate import propose
-from dmtxslide.register import recover
+from datamatrix_reader import synth
+from datamatrix_reader.locate import propose
+from datamatrix_reader.register import recover
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 PAYLOADS = [p for p in (b"S25-04821 A3-1 HE", b"PCAA00028208 A1-1",
@@ -567,7 +567,7 @@ import os
 import numpy as np
 import cv2
 from PIL import Image
-from dmtxslide.reader import Reader
+from datamatrix_reader.reader import Reader
 
 
 def load(p):
@@ -614,7 +614,7 @@ git commit -m "test(harness): synthetic generalization + pathology regression ga
 ## Task 6: `score_registration` — cheap, no-zxing registration score
 
 **Files:**
-- Modify: `src/dmtxslide/register.py` (add `score_registration`)
+- Modify: `src/datamatrix_reader/register.py` (add `score_registration`)
 - Test: `tests/test_register.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -623,7 +623,7 @@ Add to `tests/test_register.py`:
 
 ```python
 def test_score_peaks_at_true_registration():
-    from dmtxslide.register import score_registration
+    from datamatrix_reader.register import score_registration
     payload, dark = _square_symbol()          # existing helper -> (payload, MxM bool)
     M = dark.shape[0]
     img = _canvas(dark, cell=20, quiet=4)      # existing helper
@@ -641,7 +641,7 @@ def test_score_peaks_at_true_registration():
 Run: `.venv/bin/python -m pytest tests/test_register.py::test_score_peaks_at_true_registration -v`
 Expected: FAIL — `score_registration` undefined.
 
-- [ ] **Step 3: Implement `score_registration` in `src/dmtxslide/register.py`**
+- [ ] **Step 3: Implement `score_registration` in `src/datamatrix_reader/register.py`**
 
 ```python
 # weights tuned in Task 8 against WSI + synthetic; start here.
@@ -671,7 +671,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/register.py tests/test_register.py
+git add src/datamatrix_reader/register.py tests/test_register.py
 git commit -m "feat(register): score_registration — cheap no-zxing grid quality score"
 ```
 
@@ -680,7 +680,7 @@ git commit -m "feat(register): score_registration — cheap no-zxing grid qualit
 ## Task 7: Score-guided `register_candidate` with brute-force backstop
 
 **Files:**
-- Modify: `src/dmtxslide/register.py` (add `register_candidate`; call it from `decode_auto`)
+- Modify: `src/datamatrix_reader/register.py` (add `register_candidate`; call it from `decode_auto`)
 - Test: `tests/test_register.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -690,8 +690,8 @@ Add to `tests/test_register.py`:
 ```python
 def test_register_candidate_matches_bruteforce():
     import random
-    from dmtxslide import synth
-    from dmtxslide.register import recover
+    from datamatrix_reader import synth
+    from datamatrix_reader.register import recover
     rng = random.Random(7)
     payload = None
     for t in (b"DMTXSLIDE-GUIDED-TEST1", b"ABCDEFGHIJKLMNOPQRSTUVWX"):
@@ -718,7 +718,7 @@ Expected: PASS but SLOW (current brute-force `decode_auto`), or FAIL if a case m
 
 - [ ] **Step 3: Add `register_candidate` and call it from `decode_auto`**
 
-Add to `src/dmtxslide/register.py`:
+Add to `src/datamatrix_reader/register.py`:
 
 ```python
 def _brute_region(gray, cx, cy, te, ang):
@@ -796,7 +796,7 @@ Expected: `404/404`, `WRONG 0`, and `max` per-label time materially lower than t
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/register.py tests/test_register.py
+git add src/datamatrix_reader/register.py tests/test_register.py
 git commit -m "perf(register): score-guided registration + brute-force backstop"
 ```
 
@@ -805,7 +805,7 @@ git commit -m "perf(register): score-guided registration + brute-force backstop"
 ## Task 8: Tune weights; confirm efficiency + no regression
 
 **Files:**
-- Modify: `src/dmtxslide/register.py:_W_L,_W_QUIET,_W_BIMODAL` (only if needed)
+- Modify: `src/datamatrix_reader/register.py:_W_L,_W_QUIET,_W_BIMODAL` (only if needed)
 
 - [ ] **Step 1: Measure current state**
 
@@ -820,7 +820,7 @@ Increase `top_k` (e.g., 4 → 6) in `register_candidate`'s signature default, OR
 - [ ] **Step 3: Commit (only if changed)**
 
 ```bash
-git add src/dmtxslide/register.py
+git add src/datamatrix_reader/register.py
 git commit -m "perf(register): tune score weights / top_k for backstop hit rate"
 ```
 
@@ -832,7 +832,7 @@ git commit -m "perf(register): tune score weights / top_k for backstop hit rate"
 
 **Files:**
 - Create: `tools/ablate_gradient.py`
-- Modify: `src/dmtxslide/register.py` (`decode_auto` region list — only if dropping)
+- Modify: `src/datamatrix_reader/register.py` (`decode_auto` region list — only if dropping)
 
 - [ ] **Step 1: Implement `tools/ablate_gradient.py`**
 
@@ -845,7 +845,7 @@ edge/chip-confounded synthetic scenes with gradient IN vs OUT and report decode 
 import random
 import numpy as np
 import zxingcpp
-from dmtxslide import synth, register
+from datamatrix_reader import synth, register
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 PAYLOAD = next(p for p in (b"S25-04821 A3-1 HE", b"ABCDEFGHIJKLMNOPQRSTUVWX")
@@ -854,7 +854,7 @@ PAYLOAD = next(p for p in (b"S25-04821 A3-1 HE", b"ABCDEFGHIJKLMNOPQRSTUVWX")
 
 
 def _run(use_gradient):
-    from dmtxslide.locate import propose
+    from datamatrix_reader.locate import propose
     rng = random.Random(0)
     dets = [register.detect_area, register.detect_data_region] if use_gradient \
         else [register.detect_data_region]
@@ -902,7 +902,7 @@ Expected: a delta. If `with gradient` > `texture only`, **keep** gradient (no co
 - [ ] **Step 3: Commit**
 
 ```bash
-git add tools/ablate_gradient.py src/dmtxslide/register.py
+git add tools/ablate_gradient.py src/datamatrix_reader/register.py
 git commit -m "test(ablate): justify gradient detector on synthetic edge/chip scenes"
 ```
 

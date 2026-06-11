@@ -68,7 +68,7 @@ filling thin modules.
 
 ## Components
 
-### `src/dmtxslide/preprocess.py` (new)
+### `src/datamatrix_reader/preprocess.py` (new)
 
 Small, pure, no zxing — just the stage transforms and their ordered list:
 
@@ -91,7 +91,7 @@ All take and return a 2-D uint8 grayscale/binary image. Each is independently
 testable. (`s_clahe` reproduces the current shipped stage 2, now sourced here so the
 whole ladder lives in one place.)
 
-### `src/dmtxslide/reader.py` (modify)
+### `src/datamatrix_reader/reader.py` (modify)
 
 - Remove the inline `clahe` constants/logic (moved to `preprocess.py`); import
   `from .preprocess import STAGES`.

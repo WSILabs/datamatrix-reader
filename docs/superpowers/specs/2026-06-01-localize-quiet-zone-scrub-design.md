@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-01
 **Status:** approved (pending implementation plan)
-**Area:** `src/dmtxslide/localize.py` (+ its contract with `reader.py`)
+**Area:** `src/datamatrix_reader/localize.py` (+ its contract with `reader.py`)
 
 ## Problem
 

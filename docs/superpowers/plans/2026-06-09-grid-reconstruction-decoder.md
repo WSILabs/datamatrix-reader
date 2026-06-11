@@ -23,19 +23,19 @@ Spec: `docs/superpowers/specs/2026-06-09-grid-reconstruction-decoder-design.md`
 
 ## File Structure
 
-- **Create** `src/dmtxslide/griddecode.py` — `decode()` + helpers `localize`, `perspective_warp`, `sample_modules`, `render_symbol`, `_zxing`, constant `SQUARE_SIZES`.
+- **Create** `src/datamatrix_reader/griddecode.py` — `decode()` + helpers `localize`, `perspective_warp`, `sample_modules`, `render_symbol`, `_zxing`, constant `SQUARE_SIZES`.
 - **Create** `tests/test_griddecode.py` — unit tests (render round-trip, localize, sample, decode).
 - **Create** `tools/eval_griddecode.py` — corpus validation harness (the Task 5 gate).
-- **Modify** (Task 7, gated) `src/dmtxslide/reader.py` — add `griddecode` as the final fallback stage.
+- **Modify** (Task 7, gated) `src/datamatrix_reader/reader.py` — add `griddecode` as the final fallback stage.
 
-Run with `.venv/bin/python` from `/Volumes/Ext/GitHub/datamatrix-reader/dmtxslide`. Branch: `git checkout -b feat/grid-decode`.
+Run with `.venv/bin/python` from `/Volumes/Ext/GitHub/datamatrix-reader/datamatrix_reader`. Branch: `git checkout -b feat/grid-decode`.
 
 ---
 
 ### Task 1: `render_symbol` + the render→zxing keystone
 
 **Files:**
-- Create: `src/dmtxslide/griddecode.py`
+- Create: `src/datamatrix_reader/griddecode.py`
 - Create: `tests/test_griddecode.py`
 
 - [ ] **Step 1: Write the failing keystone test**
@@ -46,7 +46,7 @@ The keystone: a correct data interior, wrapped in our constructed border, render
 # tests/test_griddecode.py
 import numpy as np
 import zxingcpp
-from dmtxslide import griddecode as gd
+from datamatrix_reader import griddecode as gd
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 
@@ -67,9 +67,9 @@ def test_render_symbol_round_trips_via_zxing():
 - [ ] **Step 2: Run to verify failure**
 
 Run: `.venv/bin/python -m pytest tests/test_griddecode.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'dmtxslide.griddecode'`.
+Expected: FAIL — `ModuleNotFoundError: No module named 'datamatrix_reader.griddecode'`.
 
-- [ ] **Step 3: Create `src/dmtxslide/griddecode.py` with `render_symbol`, `_zxing`, `SQUARE_SIZES`**
+- [ ] **Step 3: Create `src/datamatrix_reader/griddecode.py` with `render_symbol`, `_zxing`, `SQUARE_SIZES`**
 
 ```python
 """Grid-reconstruction decoder: reconstruct a clean DataMatrix module matrix from a
@@ -121,7 +121,7 @@ Expected: 1 passed. (If it FAILS, the border rule is wrong — `_border_mask` is
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/griddecode.py tests/test_griddecode.py
+git add src/datamatrix_reader/griddecode.py tests/test_griddecode.py
 git commit -m "feat(griddecode): render_symbol + render->zxing keystone"
 ```
 
@@ -130,7 +130,7 @@ git commit -m "feat(griddecode): render_symbol + render->zxing keystone"
 ### Task 2: `localize` — find the code's square
 
 **Files:**
-- Modify: `src/dmtxslide/griddecode.py`
+- Modify: `src/datamatrix_reader/griddecode.py`
 - Modify: `tests/test_griddecode.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -164,7 +164,7 @@ def test_localize_blank_returns_none():
 - [ ] **Step 2: Run to verify failure**
 
 Run: `.venv/bin/python -m pytest tests/test_griddecode.py -k localize -q`
-Expected: FAIL — `AttributeError: module 'dmtxslide.griddecode' has no attribute 'localize'`.
+Expected: FAIL — `AttributeError: module 'datamatrix_reader.griddecode' has no attribute 'localize'`.
 
 - [ ] **Step 3: Implement `localize`**
 
@@ -202,7 +202,7 @@ Expected: 2 passed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/griddecode.py tests/test_griddecode.py
+git add src/datamatrix_reader/griddecode.py tests/test_griddecode.py
 git commit -m "feat(griddecode): localize the code's square quad"
 ```
 
@@ -211,7 +211,7 @@ git commit -m "feat(griddecode): localize the code's square quad"
 ### Task 3: `perspective_warp` + `sample_modules`
 
 **Files:**
-- Modify: `src/dmtxslide/griddecode.py`
+- Modify: `src/datamatrix_reader/griddecode.py`
 - Modify: `tests/test_griddecode.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -286,7 +286,7 @@ Expected: PASS (best-orientation module agreement > 95%).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/griddecode.py tests/test_griddecode.py
+git add src/datamatrix_reader/griddecode.py tests/test_griddecode.py
 git commit -m "feat(griddecode): perspective warp + module-center sampling"
 ```
 
@@ -295,7 +295,7 @@ git commit -m "feat(griddecode): perspective warp + module-center sampling"
 ### Task 4: `decode` — brute-force orchestration
 
 **Files:**
-- Modify: `src/dmtxslide/griddecode.py`
+- Modify: `src/datamatrix_reader/griddecode.py`
 - Modify: `tests/test_griddecode.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -361,7 +361,7 @@ Expected: all griddecode tests pass — including `test_decode_recovers_erased_f
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/griddecode.py tests/test_griddecode.py
+git add src/datamatrix_reader/griddecode.py tests/test_griddecode.py
 git commit -m "feat(griddecode): brute-force decode (size x rotation, ECC-validated)"
 ```
 
@@ -381,8 +381,8 @@ and recovery of the cascade-residual. The ship gate for the grid decoder."""
 import csv
 from pathlib import Path
 import cv2
-from dmtxslide import griddecode as gd
-from dmtxslide.reader import Reader
+from datamatrix_reader import griddecode as gd
+from datamatrix_reader.reader import Reader
 
 def main():
     corpus = Path("corpus/wsi_labels")
@@ -475,7 +475,7 @@ git commit -m "test(griddecode): synthetic finder-erasure breadth across payload
 ### Task 7: Integrate as the Reader's final fallback (gated on Task 5 PASS)
 
 **Files:**
-- Modify: `src/dmtxslide/reader.py`
+- Modify: `src/datamatrix_reader/reader.py`
 - Modify: `tests/test_reader.py`
 
 Only do this if Task 5 PASSED (WRONG==0 and recovered_resid>=1).
@@ -487,7 +487,7 @@ Only do this if Task 5 PASSED (WRONG==0 and recovered_resid>=1).
 def test_grid_stage_runs_last(monkeypatch):
     # all zxing attempts miss; griddecode hits -> stage "grid"
     monkeypatch.setattr(R, "_zxing", lambda g: None)
-    import dmtxslide.griddecode as gd
+    import datamatrix_reader.griddecode as gd
     monkeypatch.setattr(gd, "decode", lambda img: b"VIAGRID")
     r = Reader().read(np.full((80, 80), 255, np.uint8))
     assert r.payload == b"VIAGRID" and r.stage == "grid"
@@ -500,7 +500,7 @@ Expected: FAIL — reader has no grid stage.
 
 - [ ] **Step 3: Wire `griddecode` into `Reader.read`**
 
-In `src/dmtxslide/reader.py`, add the import and a final fallback after the `STAGES` loop. The full `read` method becomes:
+In `src/datamatrix_reader/reader.py`, add the import and a final fallback after the `STAGES` loop. The full `read` method becomes:
 
 ```python
 from . import griddecode
@@ -541,7 +541,7 @@ Expected: full suite green; cascade rate ≥ 0.983 (grid stage adds the recovere
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/reader.py tests/test_reader.py
+git add src/datamatrix_reader/reader.py tests/test_reader.py
 git commit -m "feat(reader): griddecode as the final fallback stage"
 ```
 

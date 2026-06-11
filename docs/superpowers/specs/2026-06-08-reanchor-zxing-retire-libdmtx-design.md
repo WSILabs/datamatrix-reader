@@ -52,7 +52,7 @@ Reader.read(image):
 
 ## Components
 
-### `src/dmtxslide/reader.py` — rewrite
+### `src/datamatrix_reader/reader.py` — rewrite
 
 - `ReadResult` dataclass: `payload: bytes | None`, `stage: str | None`
   (`"raw"` | `"clahe"` | `None`), `elapsed_ms: float`; `.ok` property = `payload is
@@ -69,10 +69,10 @@ Reader.read(image):
 
 ### Deletions
 
-`src/dmtxslide/binding.py`, `_build_dmtx.py`, `_dmtx.cpython-312-darwin.so`,
+`src/datamatrix_reader/binding.py`, `_build_dmtx.py`, `_dmtx.cpython-312-darwin.so`,
 `cascade.py`, `localize.py`, `adapt.py`. Remove their imports everywhere.
 
-### `src/dmtxslide/synth.py` — port the encoder
+### `src/datamatrix_reader/synth.py` — port the encoder
 
 Replace `binding.encode(payload, module_size=1, margin=2)` (returns a 1px/module
 matrix the synth then scales/degrades) with a zxing-writer encoder that yields the
@@ -115,7 +115,7 @@ unchanged. Remove any now-dead validator import.
 - Delete `[project.optional-dependencies] compare` (zxing-cpp is now core, so the
   extra is empty). Update any `pip install -e ".[compare]"` references in
   docs/HANDOFF to plain `pip install -e .`.
-- Remove `[tool.setuptools.package-data] dmtxslide = ["*.so"]` and the
+- Remove `[tool.setuptools.package-data] datamatrix_reader = ["*.so"]` and the
   `_build_dmtx` post-install note. Fresh clones no longer need libdmtx headers or a
   build step.
 

@@ -22,19 +22,19 @@ Spec: `docs/superpowers/specs/2026-06-08-ink-thickening-cascade-design.md`
 
 ## File Structure
 
-- **Create** `src/dmtxslide/preprocess.py` — stage transforms + ordered `STAGES` list (pure OpenCV/numpy, no zxing).
+- **Create** `src/datamatrix_reader/preprocess.py` — stage transforms + ordered `STAGES` list (pure OpenCV/numpy, no zxing).
 - **Create** `tests/test_preprocess.py` — unit tests for the transforms.
-- **Modify** `src/dmtxslide/reader.py` — import `STAGES`, iterate them on miss, drop the inline CLAHE constants/logic; `ReadResult.stage` values expand.
+- **Modify** `src/datamatrix_reader/reader.py` — import `STAGES`, iterate them on miss, drop the inline CLAHE constants/logic; `ReadResult.stage` values expand.
 - **Modify** `tests/test_reader.py` — keep existing tests, add ink-stage routing tests.
 
-Run everything with `.venv/bin/python` from `/Volumes/Ext/GitHub/datamatrix-reader/dmtxslide`. Branch first: `git checkout -b feat/ink-thickening-cascade`.
+Run everything with `.venv/bin/python` from `/Volumes/Ext/GitHub/datamatrix-reader/datamatrix_reader`. Branch first: `git checkout -b feat/ink-thickening-cascade`.
 
 ---
 
 ### Task 1: `preprocess.py` — the stage ladder
 
 **Files:**
-- Create: `src/dmtxslide/preprocess.py`
+- Create: `src/datamatrix_reader/preprocess.py`
 - Create: `tests/test_preprocess.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -43,7 +43,7 @@ Create `tests/test_preprocess.py`:
 
 ```python
 import numpy as np
-from dmtxslide import preprocess as pp
+from datamatrix_reader import preprocess as pp
 
 
 def test_stages_named_and_ordered():
@@ -75,9 +75,9 @@ def test_ink_stages_binarize_to_two_levels():
 - [ ] **Step 2: Run to verify failure**
 
 Run: `.venv/bin/python -m pytest tests/test_preprocess.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'dmtxslide.preprocess'`.
+Expected: FAIL — `ModuleNotFoundError: No module named 'datamatrix_reader.preprocess'`.
 
-- [ ] **Step 3: Create `src/dmtxslide/preprocess.py`**
+- [ ] **Step 3: Create `src/datamatrix_reader/preprocess.py`**
 
 ```python
 """Ordered, full-frame preprocessing stages for the Reader's fallback cascade.
@@ -139,7 +139,7 @@ Expected: 4 passed.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/preprocess.py tests/test_preprocess.py
+git add src/datamatrix_reader/preprocess.py tests/test_preprocess.py
 git commit -m "feat(preprocess): progressive ink-thickening stage ladder"
 ```
 
@@ -148,7 +148,7 @@ git commit -m "feat(preprocess): progressive ink-thickening stage ladder"
 ### Task 2: Wire the ladder into `Reader`
 
 **Files:**
-- Modify: `src/dmtxslide/reader.py`
+- Modify: `src/datamatrix_reader/reader.py`
 - Modify: `tests/test_reader.py`
 
 - [ ] **Step 1: Add the ink-stage routing tests**
@@ -166,7 +166,7 @@ def test_falls_back_through_ink_stages(monkeypatch):
 
 def test_stage_transform_error_is_treated_as_miss(monkeypatch):
     # a stage that raises must not crash read(); it's skipped like a miss
-    import dmtxslide.preprocess as pp
+    import datamatrix_reader.preprocess as pp
     boom = [("clahe", lambda g: (_ for _ in ()).throw(cv2.error("x"))),
             ("ink1", pp.s_ink1), ("ink2", pp.s_ink2)]
     monkeypatch.setattr(R, "STAGES", boom)
@@ -182,7 +182,7 @@ def test_stage_transform_error_is_treated_as_miss(monkeypatch):
 Run: `.venv/bin/python -m pytest tests/test_reader.py -q`
 Expected: FAIL — `test_falls_back_through_ink_stages` (current reader only has a single hard-coded clahe stage, never reaches "ink2") and `test_stage_transform_error_is_treated_as_miss` (no `R.STAGES`, no try/except).
 
-- [ ] **Step 3: Rewrite `src/dmtxslide/reader.py`**
+- [ ] **Step 3: Rewrite `src/datamatrix_reader/reader.py`**
 
 Replace the ENTIRE file with:
 
@@ -260,7 +260,7 @@ Expected: all reader tests pass (incl. the two new ones); full suite green.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/reader.py tests/test_reader.py
+git add src/datamatrix_reader/reader.py tests/test_reader.py
 git commit -m "feat(reader): run ink-thickening fallback ladder on zxing miss"
 ```
 
@@ -283,7 +283,7 @@ Run:
 import csv, cv2, time
 from pathlib import Path
 from collections import Counter
-from dmtxslide.reader import Reader
+from datamatrix_reader.reader import Reader
 corpus = Path("corpus/wsi_labels")
 GT = {r["file"]: r["payload"].encode() for r in csv.DictReader((corpus/"labels.csv").open(newline=""))}
 rd = Reader(); ok=wrong=0; by=Counter(); ts=[]

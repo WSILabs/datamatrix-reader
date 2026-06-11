@@ -2,7 +2,7 @@
 
 **Status:** approved (brainstorm), pending implementation plan
 **Date:** 2026-06-09
-**Scope:** `src/dmtxslide/register.py` (the finder-registration fallback) + a new
+**Scope:** `src/datamatrix_reader/register.py` (the finder-registration fallback) + a new
 localization front-end + synthetic validation.
 
 ## Goal
@@ -71,14 +71,14 @@ everything downstream stays at the canonical scale the validated repair code alr
 at. We add a front-end and swap the search engine; we do not rewrite the repair core.
 
 **Module structure:**
-- `src/dmtxslide/register.py` — canonical-scale repair core: detectors, `sample_fast`,
+- `src/datamatrix_reader/register.py` — canonical-scale repair core: detectors, `sample_fast`,
   `l_orientations`, `render_symbol`, score-guided + backstop registration, `decode_auto`.
   `dark` detector removed.
-- `src/dmtxslide/locate.py` — **new** — `propose(gray) -> [(cx, cy, size, angle), ...]`
+- `src/datamatrix_reader/locate.py` — **new** — `propose(gray) -> [(cx, cy, size, angle), ...]`
   (pyramid blob proposals). Kept separate so `register.py` stays focused.
 - `recover()` (in `register.py`) — rewritten: `propose → per-candidate normalize →
   register → decode`. No hardcoded ROI/2×.
-- `src/dmtxslide/synth.py` — extended to emit full-label scenes (below).
+- `src/datamatrix_reader/synth.py` — extended to emit full-label scenes (below).
 - `reader.py` — unchanged interface; still calls `recover()` as the `"autoreg"` fallback.
 
 ## Component 1 — Coarse proposal front-end (`locate.py`)

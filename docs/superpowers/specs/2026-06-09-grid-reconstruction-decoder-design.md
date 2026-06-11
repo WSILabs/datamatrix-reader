@@ -53,7 +53,7 @@ and accept the first decode — no precise orientation/size detection needed.
 
 ## Architecture
 
-Standalone module `src/dmtxslide/griddecode.py`:
+Standalone module `src/datamatrix_reader/griddecode.py`:
 
 ```
 decode(image) -> bytes | None:

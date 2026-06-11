@@ -19,24 +19,24 @@ Spec: `docs/superpowers/specs/2026-06-08-reanchor-zxing-retire-libdmtx-design.md
 
 ## File Structure
 
-- **Rewrite** `src/dmtxslide/reader.py` — 2-stage zxing `Reader` + `ReadResult` (no libdmtx, no cascade/localize/adapt).
+- **Rewrite** `src/datamatrix_reader/reader.py` — 2-stage zxing `Reader` + `ReadResult` (no libdmtx, no cascade/localize/adapt).
 - **Create** `tests/test_reader.py` — unit tests for the new reader.
 - **Modify** `bench/harness.py` — `Reader()` (drop `validator=AcceptAny()`), drop the `AcceptAny` import.
-- **Modify** `src/dmtxslide/synth.py` — `render()` encodes via zxing instead of `binding.encode`.
+- **Modify** `src/datamatrix_reader/synth.py` — `render()` encodes via zxing instead of `binding.encode`.
 - **Modify** `tests/test_harness.py` — symbol-size check uses `synth.render` instead of `binding.encode`.
 - **Modify** `tools/compare_backends.py` — `FOLDS` = `zxing raw` + `zxing cascade`; drop libdmtx folds/import.
-- **Delete** `src/dmtxslide/{binding.py,_build_dmtx.py,_dmtx.cpython-312-darwin.so,cascade.py,localize.py,adapt.py}`.
+- **Delete** `src/datamatrix_reader/{binding.py,_build_dmtx.py,_dmtx.cpython-312-darwin.so,cascade.py,localize.py,adapt.py}`.
 - **Modify** `pyproject.toml` — drop cffi + `.so` packaging + `[compare]`; add `zxing-cpp` as a core dep.
 - **Modify** `HANDOFF.md` — install/build commands.
 
-Run everything with `.venv/bin/python` from `/Volumes/Ext/GitHub/datamatrix-reader/dmtxslide`.
+Run everything with `.venv/bin/python` from `/Volumes/Ext/GitHub/datamatrix-reader/datamatrix_reader`.
 
 ---
 
 ### Task 1: Rewrite `Reader` as the zxing cascade
 
 **Files:**
-- Rewrite: `src/dmtxslide/reader.py`
+- Rewrite: `src/datamatrix_reader/reader.py`
 - Create: `tests/test_reader.py`
 - Modify: `bench/harness.py:31,78`
 
@@ -46,8 +46,8 @@ Create `tests/test_reader.py`:
 
 ```python
 import cv2, numpy as np, zxingcpp
-from dmtxslide import reader as R
-from dmtxslide.reader import Reader
+from datamatrix_reader import reader as R
+from datamatrix_reader.reader import Reader
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 
@@ -88,7 +88,7 @@ def test_falls_back_to_clahe_stage(monkeypatch):
 Run: `.venv/bin/python -m pytest tests/test_reader.py -q`
 Expected: FAIL — the current `ReadResult` has no `stage` attribute and `Reader` takes different args (AttributeError / TypeError).
 
-- [ ] **Step 3: Rewrite `src/dmtxslide/reader.py`**
+- [ ] **Step 3: Rewrite `src/datamatrix_reader/reader.py`**
 
 Replace the ENTIRE file with:
 
@@ -165,7 +165,7 @@ to:
 
 And delete the now-unused import (line 31):
 ```python
-from dmtxslide.validate import AcceptAny
+from datamatrix_reader.validate import AcceptAny
 ```
 
 - [ ] **Step 5: Run the new tests + full suite**
@@ -176,7 +176,7 @@ Expected: `test_reader.py` 4 passed; full suite green (synth/harness tests pass 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/dmtxslide/reader.py tests/test_reader.py bench/harness.py
+git add src/datamatrix_reader/reader.py tests/test_reader.py bench/harness.py
 git commit -m "feat(reader): rewrite Reader as zxing 2-stage cascade (raw -> upscale+CLAHE)"
 ```
 
@@ -185,7 +185,7 @@ git commit -m "feat(reader): rewrite Reader as zxing 2-stage cascade (raw -> ups
 ### Task 2: Port `synth.render` to the zxing encoder
 
 **Files:**
-- Modify: `src/dmtxslide/synth.py:20,37-39`
+- Modify: `src/datamatrix_reader/synth.py:20,37-39`
 
 - [ ] **Step 1: Add a focused test for the encoder shape/round-trip**
 
@@ -193,7 +193,7 @@ Append to `tests/test_synth.py`:
 
 ```python
 import zxingcpp
-from dmtxslide.reader import Reader
+from datamatrix_reader.reader import Reader
 
 def test_render_is_1px_module_binary_and_round_trips():
     grid = synth.render(b"S25-04821-A3")
@@ -218,7 +218,7 @@ Expected: PASS (the libdmtx encoder already satisfies these invariants — this 
 
 - [ ] **Step 3: Swap the encoder implementation**
 
-In `src/dmtxslide/synth.py`:
+In `src/datamatrix_reader/synth.py`:
 
 Replace the import (line 20):
 ```python
@@ -255,7 +255,7 @@ Expected: all green. (Pre-verified: every AXES value and the ink_gain@min-module
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/dmtxslide/synth.py tests/test_synth.py
+git add src/datamatrix_reader/synth.py tests/test_synth.py
 git commit -m "feat(synth): encode test codes with zxing-cpp writer (drop libdmtx encoder)"
 ```
 
@@ -272,7 +272,7 @@ In `tests/test_harness.py`:
 
 Delete the import (line 7):
 ```python
-from dmtxslide import binding
+from datamatrix_reader import binding
 ```
 And change the body of `test_payload_pool_spans_multiple_symbol_sizes` (line 14) from:
 ```python
@@ -282,7 +282,7 @@ to:
 ```python
     sizes = {render(p).shape for p in _payload_pool()}
 ```
-(`render` is already imported on line 8: `from dmtxslide.synth import DegradeParams, degrade, render`.)
+(`render` is already imported on line 8: `from datamatrix_reader.synth import DegradeParams, degrade, render`.)
 
 - [ ] **Step 2: Run the harness tests + full suite**
 
@@ -326,7 +326,7 @@ decode-hits + cross-decoder agreement.
 
 Delete line 25:
 ```python
-from dmtxslide import binding
+from datamatrix_reader import binding
 ```
 
 - [ ] **Step 3: Replace the fold functions and `FOLDS`**
@@ -347,7 +347,7 @@ FOLDS = [("zxing raw", fold_zxing_raw),
          ("zxing cascade", fold_zxing_cascade)]
 ```
 
-(Keep the existing `_gray` helper, `_reader = Reader()`, and `_DM`. The `_reader` line stays; `from dmtxslide.reader import Reader` stays.)
+(Keep the existing `_gray` helper, `_reader = Reader()`, and `_DM`. The `_reader` line stays; `from datamatrix_reader.reader import Reader` stays.)
 
 - [ ] **Step 4: Verify it loads and runs**
 
@@ -375,7 +375,7 @@ git commit -m "feat(compare_backends): 2-fold zxing-raw vs zxing-cascade (drop l
 ### Task 5: Delete the libdmtx shim and preprocessing front-end
 
 **Files:**
-- Delete: `src/dmtxslide/binding.py`, `_build_dmtx.py`, `_dmtx.cpython-312-darwin.so`, `cascade.py`, `localize.py`, `adapt.py`
+- Delete: `src/datamatrix_reader/binding.py`, `_build_dmtx.py`, `_dmtx.cpython-312-darwin.so`, `cascade.py`, `localize.py`, `adapt.py`
 
 - [ ] **Step 1: Confirm nothing still imports them**
 
@@ -388,16 +388,16 @@ Expected: **no output** (all references removed in Tasks 1-4). If anything print
 - [ ] **Step 2: Delete the files**
 
 ```bash
-git rm src/dmtxslide/binding.py src/dmtxslide/_build_dmtx.py \
-       src/dmtxslide/_dmtx.cpython-312-darwin.so \
-       src/dmtxslide/cascade.py src/dmtxslide/localize.py src/dmtxslide/adapt.py
+git rm src/datamatrix_reader/binding.py src/datamatrix_reader/_build_dmtx.py \
+       src/datamatrix_reader/_dmtx.cpython-312-darwin.so \
+       src/datamatrix_reader/cascade.py src/datamatrix_reader/localize.py src/datamatrix_reader/adapt.py
 ```
 
 - [ ] **Step 3: Verify import + full suite still green**
 
 Run:
 ```bash
-.venv/bin/python -c "import dmtxslide.reader, dmtxslide.synth, dmtxslide.validate; print('import ok')"
+.venv/bin/python -c "import datamatrix_reader.reader, datamatrix_reader.synth, datamatrix_reader.validate; print('import ok')"
 .venv/bin/python -m pytest tests/ -q
 ```
 Expected: `import ok`; full suite green.
@@ -426,7 +426,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dmtxslide"
+name = "datamatrix_reader"
 version = "0.0.1"
 description = "Source-agnostic DataMatrix reader for slide labels (zxing-cpp core)"
 requires-python = ">=3.10"
@@ -444,7 +444,7 @@ In `HANDOFF.md`, change the environment-rebuild commands so they no longer insta
 ```bash
 .venv/bin/pip install -e . pytest
 ```
-And delete the two "Native cffi shim" lines (the `CPATH=... python -m dmtxslide._build_dmtx` build command and the `mv dmtxslide/_dmtx.*.so ...` line) plus the `brew install libdmtx` native-dep note — they no longer apply. Add a one-line note: `# zxing-cpp is a pip wheel; no native build step.`
+And delete the two "Native cffi shim" lines (the `CPATH=... python -m datamatrix_reader._build_dmtx` build command and the `mv datamatrix_reader/_dmtx.*.so ...` line) plus the `brew install libdmtx` native-dep note — they no longer apply. Add a one-line note: `# zxing-cpp is a pip wheel; no native build step.`
 
 - [ ] **Step 3: Reinstall from the rewritten metadata and verify clean**
 
@@ -452,7 +452,7 @@ Run:
 ```bash
 .venv/bin/pip install -e . pytest 2>&1 | tail -3
 .venv/bin/python -c "import cffi" 2>&1 | tail -1   # expect ModuleNotFoundError is fine; cffi no longer required
-.venv/bin/python -c "import dmtxslide.reader, zxingcpp; print('install ok')"
+.venv/bin/python -c "import datamatrix_reader.reader, zxingcpp; print('install ok')"
 .venv/bin/python -m pytest tests/ -q
 ```
 Expected: install succeeds; `install ok`; full suite green. (cffi may still be present from before — that's harmless; the point is it's no longer a declared dependency.)

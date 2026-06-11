@@ -568,13 +568,13 @@ Append under the existing wsi_labels block in `.gitignore`:
 
 ```
 # No-barcode labels moved aside by tools/label_gt.py (PHI). NEVER commit.
-dmtxslide/corpus/wsi_labels_removed/
+datamatrix_reader/corpus/wsi_labels_removed/
 corpus/wsi_labels_removed/
 ```
 
 - [ ] **Step 2: Verify it's ignored**
 
-Run: `git check-ignore dmtxslide/corpus/wsi_labels_removed/ ; git status --short`
+Run: `git check-ignore datamatrix_reader/corpus/wsi_labels_removed/ ; git status --short`
 Expected: `check-ignore` echoes the path; `git status` shows only the modified `.gitignore`.
 
 - [ ] **Step 3: Commit the ignore rule**
@@ -597,7 +597,7 @@ Expected: `compare_backends` now prints correctness **rates** (not just hits) fo
 
 ## Notes for the implementer
 
-- Run everything with `.venv/bin/python` from `dmtxslide/` (project lives in that subdir; the repo root is one level up).
+- Run everything with `.venv/bin/python` from `datamatrix_reader/` (project lives in that subdir; the repo root is one level up).
 - `tools/` has no `__init__.py` but is imported as `tools.compare_backends` / `tools.label_gt` via the `-m` runner and pytest's rootdir — keep that pattern; don't add packaging.
 - The GUI deliberately keeps a reference to the current `PhotoImage` (`photo["ref"]`); dropping it causes Tk to garbage-collect the image and show blank.
 - Decoder returns are `bytes`; everything user-facing/CSV is text via `payload_to_text`. Keep that boundary — don't mix.

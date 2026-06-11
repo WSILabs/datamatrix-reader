@@ -10,7 +10,7 @@ import pytest
 import zxingcpp
 
 from dmtxslide.register import (decode_auto, detect_area, border_mask, render_symbol,
-                                _square_from_coverage)
+                                _square_from_coverage, _fft_pitch)
 
 _DM = zxingcpp.BarcodeFormat.DataMatrix
 
@@ -100,6 +100,18 @@ def test_square_from_coverage_clips_narrow_protrusion():
     (_, rcy), _, _ = cv2.minAreaRect(cd)             # rect center dragged DOWN by the tail
     assert abs(dcy - 140) < 12 and abs(dside - 120) < 16   # clip stays on the square
     assert rcy > dcy + 8                             # ...whereas the rect drifted down
+
+
+def test_fft_pitch_recovers_known_module_pitch():
+    """_fft_pitch must recover a known module pitch (it orders the symbol-size search;
+    autocorrelation was biased ~1.5px low, the FFT peak is not)."""
+    rng = np.random.default_rng(0)
+    M, cell = 22, 20
+    grid = rng.random((M, M)) < 0.5
+    img = np.where(np.kron(grid, np.ones((cell, cell))), 0, 255).astype(np.uint8)
+    img = cv2.copyMakeBorder(img, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=255)
+    p = _fft_pitch(img, cell * 0.6, cell * 1.5)
+    assert p is not None and abs(p - cell) < 2.0   # within 2px of the true 20px pitch
 
 
 def test_decode_auto_returns_none_on_blank():

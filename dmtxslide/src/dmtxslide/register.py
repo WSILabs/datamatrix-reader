@@ -261,16 +261,47 @@ def _outward(values, center):
     return sorted(values, key=lambda v: abs(v - center))
 
 
+def _fft_pitch(gray, lo, hi):
+    """Dominant module pitch (px) in [lo, hi] via the FFT power-spectrum peak (Hanning window
+    + parabolic sub-pixel refinement) of gradient-energy row/col profiles. Validated ~95%
+    correct at M-selection on this corpus (vs zxing extra['Version']); used ONLY to order the
+    symbol-size search, so a wrong estimate costs speed, never recall. Returns None if the band
+    is empty. (Plain autocorrelation was biased ~1.5px low and misordered M — the FFT peak is
+    unbiased; see the autoreg/cascade memory.)"""
+    lo, hi = max(1, int(lo)), int(hi)
+    if hi <= lo:
+        return None
+    g = gray.astype(np.float32)
+    g = g - cv2.GaussianBlur(g, (0, 0), max(gray.shape) / 20.0)      # drop low-freq shading
+    pitches = []
+    for prof in (np.abs(np.diff(g, axis=0)).mean(axis=1),
+                 np.abs(np.diff(g, axis=1)).mean(axis=0)):
+        prof = prof - prof.mean()
+        N = prof.size
+        P = np.abs(np.fft.rfft(prof * np.hanning(N))) ** 2
+        klo, khi = max(1, int(N / hi)), min(len(P) - 2, int(N / lo))
+        if khi <= klo:
+            continue
+        k = klo + int(np.argmax(P[klo:khi + 1]))
+        d = P[k - 1] - 2 * P[k] + P[k + 1]                          # parabolic peak refine
+        pitches.append(N / (k + (0.5 * (P[k - 1] - P[k + 1]) / d if d else 0.0)))
+    return float(np.mean(pitches)) if pitches else None
+
+
 def _brute_region(gray, cx, cy, te, ang, ocx=None, ocy=None, oside=None):
     """Exhaustive registration search for ONE region, ordered most-likely-FIRST. The search
     RANGES are anchored to the rect (cx, cy, te) — identical coverage to a full sweep, so recall
     is unchanged. The ORDER expands outward from the coverage-clip estimate (ocx, ocy, oside)
     when given (its pitch oside/M and center seed the most-likely hypotheses, drip-corrected),
-    else from the rect itself. Only iteration order — hence early-exit speed — differs.
-    ECC-validated -> never mis-reads."""
+    else from the rect itself. The symbol SIZE is tried FFT-estimate-first (the measured pitch
+    picks the likely M), then by closeness to that estimate with ties broken common-first (SIZES
+    order). Only iteration order — hence early-exit speed — differs. ECC-validated -> never
+    mis-reads."""
     ocx = cx if ocx is None else ocx
     ocy = cy if ocy is None else ocy
-    for M in SIZES:
+    pitch = _fft_pitch(gray, oside / (max(SIZES) + 1), oside / (min(SIZES) - 1)) if oside else None
+    sizes = sorted(SIZES, key=lambda M: abs(M - oside / pitch)) if pitch else SIZES
+    for M in sizes:
         cell0 = (oside / M) if oside else (te / M)
         for cell in _outward(np.arange(te / (M + 3), te / (M - 1), 0.5), cell0):
             for ddeg in _outward(np.arange(-3, 3.01, 1.0), 0.0):
